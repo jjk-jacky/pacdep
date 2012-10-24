@@ -13,10 +13,10 @@
 
 #define BUF_LEN     255
 
-/* pcman default values */
-#define PACMAN_CONFFILE "/etc/pacman.conf"
-#define PACMAN_ROOTDIR  "/"
-#define PACMAN_DBPATH   "/var/lib/pacman/"
+/* pacman default values */
+#define PACMAN_CONFFILE         "/etc/pacman.conf"
+#define PACMAN_ROOTDIR          "/"
+#define PACMAN_DBPATH           "/var/lib/pacman/"
 
 #if defined(GIT_VERSION)
 #undef PACKAGE_VERSION
@@ -61,12 +61,18 @@ typedef struct _pkg_t {
     dep_t        dep;
 } pkg_t;
 
+typedef struct _group_t {
+    const char  *title;
+    off_t        size;
+    off_t        size_local;
+    alpm_list_t *pkgs;
+    int          len_max;
+} group_t;
+
 typedef struct _data_t {
     pkg_t       *pkg;
-    off_t        size[NB_DEPS];
+    group_t      group[NB_DEPS];
     alpm_list_t *deps;
-    alpm_list_t *pkgs[NB_DEPS];
-    int          len_max[NB_DEPS];
 } data_t;
 
 typedef struct _config_t {
@@ -173,10 +179,10 @@ show_version (void)
 }
 
 static void
-show_help (void)
+show_help (const char *prgname)
 {
     puts ("Usage:");
-    puts (" " PACKAGE_NAME " [OPTION..] PACKAGE..");
+    printf (" %s [OPTION..] PACKAGE..\n", prgname);
     putchar ('\n');
     puts (" -h, --help                      Show this help screen and exit");
     puts (" -V, --version                   Show version information and exit");
@@ -188,6 +194,9 @@ show_help (void)
     puts (" -E, --list-exclusive-explicit   List exclusive explicit dependencies");
     puts (" -s, --list-shared               List shared dependencies");
     puts (" -S, --list-shared-explicit      List shared explicit dependencies");
+    puts (" -p, --show-optional             Show optional dependencies (see man page)");
+    puts (" -o, --list-optional             List optional dependencies");
+    puts (" -O, --list-optional-explicit    List optional explicit dependencies");
     puts (" -x, --explicit                  Don't ignore explicitly installed dependencies");
     exit (0);
 }
@@ -799,15 +808,16 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
     {
         if (pkg->dep != DEP_UNKNOWN)
         {
-            data->size[pkg->dep] -= alpm_pkg_get_isize (pkg->pkg);
+            data->group[pkg->dep].size -= alpm_pkg_get_isize (pkg->pkg);
             if (!pkg->repo)
             {
+                data->group[pkg->dep].size_local -= alpm_pkg_get_isize (pkg->pkg);
             }
-            for (i = data->pkgs[dep]; i; i = alpm_list_next (i))
+            for (i = data->group[dep].pkgs; i; i = alpm_list_next (i))
             {
                 if (i->data == pkg)
                 {
-                    alpm_list_remove_item (data->pkgs[dep], i);
+                    alpm_list_remove_item (data->group[dep].pkgs, i);
                     break;
                 }
             }
@@ -825,15 +835,19 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
                 len += (int) strlen (pkg->repo) + 1; /* +1 for slash */
             }
 
-            data->pkgs[dep] = alpm_list_add_sorted (data->pkgs[dep],
+            data->group[dep].pkgs = alpm_list_add_sorted (data->group[dep].pkgs,
                     pkg,
                     (alpm_list_fn_cmp) pkg_origin_name_cmp);
-            if (len > data->len_max[dep])
+            if (len > data->group[dep].len_max)
             {
-                data->len_max[dep] = len;
+                data->group[dep].len_max = len;
             }
         }
-        data->size[dep] += alpm_pkg_get_isize (pkg->pkg);
+        data->group[dep].size += alpm_pkg_get_isize (pkg->pkg);
+        if (!pkg->repo)
+        {
+            data->group[dep].size_local += alpm_pkg_get_isize (pkg->pkg);
+        }
     }
     pkg->dep = dep;
 
@@ -874,21 +888,47 @@ static void
 list_dependencies (data_t *data, dep_t dep)
 {
     alpm_list_t *i;
+    int flag = 0;
 
-    for (i = data->pkgs[dep]; i; i = alpm_list_next (i))
+    /* is this group mixed (pkgs from local & sync) ? */
+    if (data->group[dep].size_local > 0
+            && data->group[dep].size > data->group[dep].size_local)
+    {
+        flag = 1;
+    }
+
+    for (i = data->group[dep].pkgs; i; i = alpm_list_next (i))
     {
         pkg_t *p = i->data;
+
+        if (flag == 1)
+        {
+            fprintf (stdout, " %*s", -8, "local:");
+            print_size (data->group[dep].size_local);
+            fputc ('\n', stdout);
+            flag = 2;
+        }
+
         if (p->repo)
         {
-            fprintf (stdout, " %s/%*s",
+            if (flag == 2)
+            {
+                fprintf (stdout, " %*s", -8, "sync:");
+                print_size (data->group[dep].size - data->group[dep].size_local);
+                fputc ('\n', stdout);
+                flag = 3;
+            }
+            fprintf (stdout, (flag) ? "  %s/%*s" : " %s/%*s",
                     p->repo,
                     /* +1 for the slash */
-                    -data->len_max[dep] + (int) strlen (p->repo) + 1,
+                    -data->group[dep].len_max + (int) strlen (p->repo) + 1,
                     p->name);
         }
         else
         {
-            fprintf (stdout, " %*s", -data->len_max[dep], p->name);
+            fprintf (stdout, (flag) ? "  %*s" : " %*s",
+                    -data->group[dep].len_max,
+                    p->name);
         }
         print_size (alpm_pkg_get_isize (p->pkg));
         fputc ('\n', stdout);
@@ -930,7 +970,7 @@ main (int argc, char *argv[])
         switch (o)
         {
             case 'h':
-                show_help ();
+                show_help (argv[0]);
                 /* not reached */
                 break;
             case 'V':
@@ -982,6 +1022,12 @@ main (int argc, char *argv[])
     {
         fprintf (stderr, "Missing package name(s)\n");
         return E_NOPKG;
+    }
+    /* options -o/-O implies -p */
+    if ((config.list_optional || config.list_optional_explicit)
+            && !config.show_optional)
+    {
+        config.show_optional = 1;
     }
 
     char *error;
@@ -1041,7 +1087,8 @@ main (int argc, char *argv[])
         if (alpm_pkg_get_origin (pkg) == PKG_FROM_SYNCDB)
         {
             /* +1 for the / */
-            len_max += 1 + strlen (alpm_db_get_name (alpm_pkg_get_db (pkg)));
+            len_max += 1 + (int) strlen (
+                    alpm_db_get_name (alpm_pkg_get_db (pkg)));
         }
 
         alpm_list_t *i;
@@ -1204,23 +1251,38 @@ main (int argc, char *argv[])
             }
         }
         /* put the package size under DEP_UNKNOWN (not used otherwise) */
-        data.size[DEP_UNKNOWN] = alpm_pkg_get_isize (data.pkg->pkg);
+        data.group[DEP_UNKNOWN].size_local = alpm_pkg_get_isize (data.pkg->pkg);
 
         /* exclusive dependencies */
-        const char *groups[] = {
-            "Exclusive dependencies:",
-            "Exclusive explicit dependencies:",
-            "Optional dependencies:",
-            "Optional explicit dependencies:",
-            "Shared dependencies:",
-            "Shared explicit dependencies:",
-            "Total dependencies:",
+        data.group[DEP_UNKNOWN].title            = "Total dependencies:";
+        data.group[DEP_EXCLUSIVE].title          = "Exclusive dependencies:";
+        data.group[DEP_EXCLUSIVE_EXPLICIT].title = "Exclusive explicit dependencies:";
+        data.group[DEP_OPTIONAL].title           = "Optional dependencies:";
+        data.group[DEP_OPTIONAL_EXPLICIT].title  = "Optional explicit dependencies:";
+        data.group[DEP_SHARED].title             = "Shared dependencies:";
+        data.group[DEP_SHARED_EXPLICIT].title    = "Shared explicit dependencies:";
+
+        int len = (int) strlen (data.group[DEP_UNKNOWN].title) + 1;
+        if (len > len_max)
+        {
+            len_max = len;
+        }
+
+        const char **t, *titles[] = { data.group[DEP_EXCLUSIVE].title,
+            data.group[DEP_EXCLUSIVE_EXPLICIT].title,
+            data.group[DEP_OPTIONAL].title,
+            data.group[DEP_OPTIONAL_EXPLICIT].title,
+            data.group[DEP_SHARED].title,
+            data.group[DEP_SHARED_EXPLICIT].title,
             NULL
         };
-        const char **g;
-        for (g = &groups[0]; *g; ++g)
+        for (t = titles; *t; ++t)
         {
-            int len = (int) strlen (*g) + 1;
+            if ((t - titles) % 2 && !config.explicit)
+            {
+                continue;
+            }
+            int len = (int) strlen (*t) + 1;
             if (len > len_max)
             {
                 len_max = len;
@@ -1228,12 +1290,12 @@ main (int argc, char *argv[])
         }
 
         /* printing results */
-        off_t size_exclusive = data.size[DEP_EXCLUSIVE]
-            + data.size[DEP_EXCLUSIVE_EXPLICIT];
-        off_t size_shared = data.size[DEP_SHARED]
-            + data.size[DEP_SHARED_EXPLICIT];
-        off_t size_optional = data.size[DEP_OPTIONAL]
-            + data.size[DEP_OPTIONAL_EXPLICIT];
+        off_t size_exclusive = data.group[DEP_EXCLUSIVE].size
+            + data.group[DEP_EXCLUSIVE_EXPLICIT].size;
+        off_t size_shared = data.group[DEP_SHARED].size
+            + data.group[DEP_SHARED_EXPLICIT].size;
+        off_t size_optional = data.group[DEP_OPTIONAL].size
+            + data.group[DEP_OPTIONAL_EXPLICIT].size;
 
         /* package */
         if (data.pkg->repo)
@@ -1266,11 +1328,25 @@ main (int argc, char *argv[])
                     -len_max + (int) strlen (name) + 16,
                     data.pkg->name);
         }
-        print_size (data.size[DEP_UNKNOWN]);
-        if (size_exclusive > 0)
+        print_size (data.group[DEP_UNKNOWN].size_local);
+        /* pkg size + exclusive & optional deps of its kind (local/sync) */
+        data.group[DEP_UNKNOWN].size = data.group[DEP_EXCLUSIVE].size_local
+            + data.group[DEP_EXCLUSIVE_EXPLICIT].size_local
+            + data.group[DEP_OPTIONAL].size_local
+            + data.group[DEP_OPTIONAL_EXPLICIT].size_local;
+        if (data.pkg->repo)
+        {
+            data.group[DEP_UNKNOWN].size *= -1;
+            data.group[DEP_UNKNOWN].size += data.group[DEP_EXCLUSIVE].size
+                + data.group[DEP_EXCLUSIVE_EXPLICIT].size
+                + data.group[DEP_OPTIONAL].size
+                + data.group[DEP_OPTIONAL_EXPLICIT].size;
+        }
+        data.group[DEP_UNKNOWN].size += data.group[DEP_UNKNOWN].size_local;
+        if (data.group[DEP_UNKNOWN].size > data.group[DEP_UNKNOWN].size_local)
         {
             fputs (" (", stdout);
-            print_size (data.size[DEP_UNKNOWN] + size_exclusive + size_optional);
+            print_size (data.group[DEP_UNKNOWN].size);
             fputs (")\n", stdout);
         }
         else
@@ -1279,8 +1355,8 @@ main (int argc, char *argv[])
         }
 
         /* exclusive deps */
-        fprintf (stdout, "%*s", -len_max, groups[0]);
-        print_size (data.size[DEP_EXCLUSIVE]);
+        fprintf (stdout, "%*s", -len_max, data.group[DEP_EXCLUSIVE].title);
+        print_size (data.group[DEP_EXCLUSIVE].size);
         fputc ('\n', stdout);
         if (config.list_exclusive)
         {
@@ -1290,10 +1366,12 @@ main (int argc, char *argv[])
         if (config.explicit)
         {
             /* exclusive explicit deps */
-            fprintf (stdout, "%*s", -len_max, groups[1]);
-            print_size (data.size[DEP_EXCLUSIVE_EXPLICIT]);
-            if (data.size[DEP_EXCLUSIVE] > 0
-                    && data.size[DEP_EXCLUSIVE_EXPLICIT] > 0)
+            fprintf (stdout, "%*s",
+                    -len_max,
+                    data.group[DEP_EXCLUSIVE_EXPLICIT].title);
+            print_size (data.group[DEP_EXCLUSIVE_EXPLICIT].size);
+            if (data.group[DEP_EXCLUSIVE].size > 0
+                    && data.group[DEP_EXCLUSIVE_EXPLICIT].size > 0)
             {
                 fputs (" (", stdout);
                 print_size (size_exclusive);
@@ -1312,8 +1390,8 @@ main (int argc, char *argv[])
         if (config.show_optional)
         {
             /* optional deps */
-            fprintf (stdout, "%*s", -len_max, groups[2]);
-            print_size (data.size[DEP_OPTIONAL]);
+            fprintf (stdout, "%*s", -len_max, data.group[DEP_OPTIONAL].title);
+            print_size (data.group[DEP_OPTIONAL].size);
             fputc ('\n', stdout);
             if (config.list_optional)
             {
@@ -1323,10 +1401,12 @@ main (int argc, char *argv[])
             if (config.explicit)
             {
                 /* exclusive explicit deps */
-                fprintf (stdout, "%*s", -len_max, groups[3]);
-                print_size (data.size[DEP_OPTIONAL_EXPLICIT]);
-                if (data.size[DEP_OPTIONAL] > 0
-                        && data.size[DEP_OPTIONAL_EXPLICIT] > 0)
+                fprintf (stdout, "%*s",
+                        -len_max,
+                        data.group[DEP_OPTIONAL_EXPLICIT].title);
+                print_size (data.group[DEP_OPTIONAL_EXPLICIT].size);
+                if (data.group[DEP_OPTIONAL].size > 0
+                        && data.group[DEP_OPTIONAL_EXPLICIT].size > 0)
                 {
                     fputs (" (", stdout);
                     print_size (size_optional);
@@ -1344,8 +1424,8 @@ main (int argc, char *argv[])
         }
 
         /* shared deps */
-        fprintf (stdout, "%*s", -len_max, groups[4]);
-        print_size (data.size[DEP_SHARED]);
+        fprintf (stdout, "%*s", -len_max, data.group[DEP_SHARED].title);
+        print_size (data.group[DEP_SHARED].size);
         fputc ('\n', stdout);
         if (config.list_shared)
         {
@@ -1355,10 +1435,12 @@ main (int argc, char *argv[])
         if (config.explicit)
         {
             /* shared explicit deps */
-            fprintf (stdout, "%*s", -len_max, groups[5]);
-            print_size (data.size[DEP_SHARED_EXPLICIT]);
-            if (data.size[DEP_SHARED] > 0
-                    && data.size[DEP_SHARED_EXPLICIT] > 0)
+            fprintf (stdout, "%*s",
+                    -len_max,
+                    data.group[DEP_SHARED_EXPLICIT].title);
+            print_size (data.group[DEP_SHARED_EXPLICIT].size);
+            if (data.group[DEP_SHARED].size > 0
+                    && data.group[DEP_SHARED_EXPLICIT].size > 0)
             {
                 fputs (" (", stdout);
                 print_size (size_shared);
@@ -1375,10 +1457,10 @@ main (int argc, char *argv[])
         }
 
         /* total deps */
-        fprintf (stdout, "%*s", -len_max, groups[6]);
+        fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
         print_size (size_exclusive + size_shared + size_optional);
         fputs (" (", stdout);
-        print_size (data.size[DEP_UNKNOWN]
+        print_size (data.group[DEP_UNKNOWN].size
                 + size_exclusive
                 + size_shared
                 + size_optional);

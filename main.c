@@ -11,7 +11,7 @@
 #include <alpm_list.h>
 #include <alpm.h>
 
-#define BUF_LEN     255
+#define BUF_LEN                 255
 
 /* pacman default values */
 #define PACMAN_CONFFILE         "/etc/pacman.conf"
@@ -884,7 +884,7 @@ free_pkg (pkg_t *pkg)
     free (pkg);
 }
 
-static void
+static inline void
 list_dependencies (data_t *data, dep_t dep)
 {
     alpm_list_t *i;
@@ -932,6 +932,43 @@ list_dependencies (data_t *data, dep_t dep)
         }
         print_size (alpm_pkg_get_isize (p->pkg));
         fputc ('\n', stdout);
+    }
+}
+
+static void
+print_group (data_t *data,
+        dep_t        dep,
+        int          len_max,
+        off_t        size,
+        int          list_deps,
+        int          list_deps_explicit)
+{
+    fprintf (stdout, "%*s", -len_max, data->group[dep].title);
+    print_size (data->group[dep].size);
+    fputc ('\n', stdout);
+    if (list_deps)
+    {
+        list_dependencies (data, dep);
+    }
+
+    if (config.explicit)
+    {
+        fprintf (stdout, "%*s", -len_max, data->group[dep + 1].title);
+        print_size (data->group[dep + 1].size);
+        if (data->group[dep].size > 0 && data->group[dep + 1].size > 0)
+        {
+            fputs (" (", stdout);
+            print_size (size);
+            fputs (")\n", stdout);
+        }
+        else
+        {
+            fputc ('\n', stdout);
+        }
+        if (list_deps_explicit)
+        {
+            list_dependencies (data, dep + 1);
+        }
     }
 }
 
@@ -1354,106 +1391,31 @@ main (int argc, char *argv[])
         }
 
         /* exclusive deps */
-        fprintf (stdout, "%*s", -len_max, data.group[DEP_EXCLUSIVE].title);
-        print_size (data.group[DEP_EXCLUSIVE].size);
-        fputc ('\n', stdout);
-        if (config.list_exclusive)
-        {
-            list_dependencies (&data, DEP_EXCLUSIVE);
-        }
-
-        if (config.explicit)
-        {
-            /* exclusive explicit deps */
-            fprintf (stdout, "%*s",
-                    -len_max,
-                    data.group[DEP_EXCLUSIVE_EXPLICIT].title);
-            print_size (data.group[DEP_EXCLUSIVE_EXPLICIT].size);
-            if (data.group[DEP_EXCLUSIVE].size > 0
-                    && data.group[DEP_EXCLUSIVE_EXPLICIT].size > 0)
-            {
-                fputs (" (", stdout);
-                print_size (size_exclusive);
-                fputs (")\n", stdout);
-            }
-            else
-            {
-                fputc ('\n', stdout);
-            }
-            if (config.list_exclusive_explicit)
-            {
-                list_dependencies (&data, DEP_EXCLUSIVE_EXPLICIT);
-            }
-        }
+        print_group (&data,
+                DEP_EXCLUSIVE,
+                len_max,
+                size_exclusive,
+                config.list_exclusive,
+                config.list_exclusive_explicit);
 
         if (config.show_optional)
         {
             /* optional deps */
-            fprintf (stdout, "%*s", -len_max, data.group[DEP_OPTIONAL].title);
-            print_size (data.group[DEP_OPTIONAL].size);
-            fputc ('\n', stdout);
-            if (config.list_optional)
-            {
-                list_dependencies (&data, DEP_OPTIONAL);
-            }
-
-            if (config.explicit)
-            {
-                /* exclusive explicit deps */
-                fprintf (stdout, "%*s",
-                        -len_max,
-                        data.group[DEP_OPTIONAL_EXPLICIT].title);
-                print_size (data.group[DEP_OPTIONAL_EXPLICIT].size);
-                if (data.group[DEP_OPTIONAL].size > 0
-                        && data.group[DEP_OPTIONAL_EXPLICIT].size > 0)
-                {
-                    fputs (" (", stdout);
-                    print_size (size_optional);
-                    fputs (")\n", stdout);
-                }
-                else
-                {
-                    fputc ('\n', stdout);
-                }
-                if (config.list_optional_explicit)
-                {
-                    list_dependencies (&data, DEP_OPTIONAL_EXPLICIT);
-                }
-            }
+            print_group (&data,
+                    DEP_OPTIONAL,
+                    len_max,
+                    size_optional,
+                    config.list_optional,
+                    config.list_optional_explicit);
         }
 
         /* shared deps */
-        fprintf (stdout, "%*s", -len_max, data.group[DEP_SHARED].title);
-        print_size (data.group[DEP_SHARED].size);
-        fputc ('\n', stdout);
-        if (config.list_shared)
-        {
-            list_dependencies (&data, DEP_SHARED);
-        }
-
-        if (config.explicit)
-        {
-            /* shared explicit deps */
-            fprintf (stdout, "%*s",
-                    -len_max,
-                    data.group[DEP_SHARED_EXPLICIT].title);
-            print_size (data.group[DEP_SHARED_EXPLICIT].size);
-            if (data.group[DEP_SHARED].size > 0
-                    && data.group[DEP_SHARED_EXPLICIT].size > 0)
-            {
-                fputs (" (", stdout);
-                print_size (size_shared);
-                fputs (")\n", stdout);
-            }
-            else
-            {
-                fputc ('\n', stdout);
-            }
-            if (config.list_shared_explicit)
-            {
-                list_dependencies (&data, DEP_SHARED_EXPLICIT);
-            }
-        }
+        print_group (&data,
+                DEP_SHARED,
+                len_max,
+                size_shared,
+                config.list_shared,
+                config.list_shared_explicit);
 
         /* total deps */
         fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);

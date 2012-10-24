@@ -1041,14 +1041,13 @@ main (int argc, char *argv[])
         return rc;
     }
 
-    alpm_pkg_t  *pkg;
-
     config.localdb = alpm_list_add (NULL, alpm_option_get_localdb (config.alpm));
     config.syncdbs = alpm_option_get_syncdbs (config.alpm);
 
     while (optind < argc)
     {
         data_t      data;
+        alpm_pkg_t *pkg;
         const char *name = argv[optind];
         const char *s;
 
@@ -1470,6 +1469,13 @@ main (int argc, char *argv[])
         alpm_list_free_inner (data.deps, (alpm_list_fn_free) free_pkg);
         alpm_list_free (data.deps);
         data.deps = NULL;
+
+        /* free groups list of packages */
+        int d;
+        for (d = 0; d < NB_DEPS; ++d)
+        {
+            alpm_list_free (data.group[d].pkgs);
+        }
 
         /* next */
         if (++optind < argc)

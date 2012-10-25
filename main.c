@@ -22,7 +22,7 @@
 #undef PACKAGE_VERSION
 #define PACKAGE_VERSION GIT_VERSION
 #endif
-#define PACKAGE_TAG             "Package Dependencies Helper"
+#define PACKAGE_TAG             "Package Dependencies listing"
 
 enum {
     E_OK = 0,
@@ -813,11 +813,12 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
             {
                 data->group[pkg->dep].size_local -= alpm_pkg_get_isize (pkg->pkg);
             }
-            for (i = data->group[dep].pkgs; i; i = alpm_list_next (i))
+            for (i = data->group[pkg->dep].pkgs; i; i = alpm_list_next (i))
             {
                 if (i->data == pkg)
                 {
-                    alpm_list_remove_item (data->group[dep].pkgs, i);
+                    data->group[pkg->dep].pkgs = alpm_list_remove_item (
+                            data->group[pkg->dep].pkgs, i);
                     break;
                 }
             }
@@ -950,6 +951,17 @@ print_group (data_t *data,
     {
         list_dependencies (data, dep);
     }
+    /* is this group mixed (pkgs from local & sync) ? */
+    else if (data->group[dep].size_local > 0
+            && data->group[dep].size > data->group[dep].size_local)
+    {
+        fprintf (stdout, " %*s", -8, "local:");
+        print_size (data->group[dep].size_local);
+        fputc ('\n', stdout);
+        fprintf (stdout, " %*s", -8, "sync:");
+        print_size (data->group[dep].size - data->group[dep].size_local);
+        fputc ('\n', stdout);
+    }
 
     if (config.explicit)
     {
@@ -968,6 +980,18 @@ print_group (data_t *data,
         if (list_deps_explicit)
         {
             list_dependencies (data, dep + 1);
+        }
+        /* is this group mixed (pkgs from local & sync) ? */
+        else if (data->group[dep].size_local > 0
+                && data->group[dep].size > data->group[dep].size_local)
+        {
+            fprintf (stdout, " %*s", -8, "local:");
+            print_size (data->group[dep + 1].size_local);
+            fputc ('\n', stdout);
+            fprintf (stdout, " %*s", -8, "sync:");
+            print_size (data->group[dep + 1].size
+                    - data->group[dep + 1].size_local);
+            fputc ('\n', stdout);
         }
     }
 }
@@ -1025,12 +1049,14 @@ main (int argc, char *argv[])
                 break;
             case 'E':
                 config.list_exclusive_explicit = 1;
+                config.explicit = 1;
                 break;
             case 's':
                 config.list_shared = 1;
                 break;
             case 'S':
                 config.list_shared_explicit = 1;
+                config.explicit = 1;
                 break;
             case 'p':
                 if (config.show_optional >= 3)
@@ -1046,6 +1072,7 @@ main (int argc, char *argv[])
                 break;
             case 'O':
                 config.list_optional_explicit = 1;
+                config.explicit = 1;
                 break;
             case 'x':
                 config.explicit = 1;
@@ -1421,7 +1448,7 @@ main (int argc, char *argv[])
         fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
         print_size (size_exclusive + size_shared + size_optional);
         fputs (" (", stdout);
-        print_size (data.group[DEP_UNKNOWN].size
+        print_size (data.group[DEP_UNKNOWN].size_local
                 + size_exclusive
                 + size_shared
                 + size_optional);

@@ -17,5 +17,5 @@ AM_CFLAGS = -g -std=c99 \
 pacdep_SOURCES = main.c
 
 pacdep.1: pacdep.pod
-	pod2man --center="Pacman Dependencies listing" --section=1 --release=$(PACKAGE_VERSION) pacdep.pod pacdep.1
+	pod2man --center="Package Dependencies listing" --section=1 --release=$(PACKAGE_VERSION) pacdep.pod pacdep.1
 

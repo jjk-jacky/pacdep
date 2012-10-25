@@ -1,0 +1,172 @@
+=head1 NAME
+
+pacdep - Package Dependencies listing
+
+=head1 SYNOPSIS
+
+B<pacdep> [I<OPTION>..] I<PACKAGE>..
+
+=head1 OPTIONS
+
+=over
+
+=item B<-c, --config=FILE>
+
+Use B<FILE> to configure ALPM instead of I</etc/pacman.conf>
+
+=item B<-d, --debug>
+
+Flood debug info to stdout
+
+=item B<-e, --list-exclusive>
+
+List exclusive dependencies
+
+=item B<-E, --list-exclusive-explicit>
+
+List exclusive explicit dependencies. Implies B<--explicit>
+
+=item B<-s, --list-shared>
+
+List shared dependencies
+
+=item B<-S, --list-shared-explicit>
+
+List shared explicit dependencies. Implies B<--explicit>
+
+=item B<-p, --show-optional>
+
+Take optional dependencies into consideration. This will include optional
+dependencies if they're not explicitly installed (unless B<--explicit> was used),
+and aren't required/dependency of an installed package.
+
+Specify this option twice to also include packages that are dependencies of
+installed package.
+
+Specify it a third time to include all optional dependencies. This will include
+both explicitly installed packages, as well as non-installed packages.
+
+See L<B<NOTES>|/NOTES> below.
+
+=item B<-o, --list-optional>
+
+List optional dependencies. Implies B<--show-optional>
+
+Note that to specify B<--show-optional> multiple times, you still need to
+include it as many times as needed (i.e. 2 or 3)
+
+=item B<-O, --list-optional-explicit>
+
+List optional explicit dependencies. Implies B<--show-optional> and B<--explicit>
+
+Note that to specify B<--show-optional> multiple times, you still need to
+include it as many times as needed (i.e. 2 or 3)
+
+=item B<-x, --explicit>
+
+Don't ignore explicitly installed dependencies
+
+=item B<-V, --version>
+
+Show version information and exit
+
+=item B<-h, --help>
+
+Show a little help screen and exit
+
+=back
+
+=head1 DESCRIPTION
+
+B<pacdep> is a small tool that will allow you to quickly see how much space is
+being used/required by a package (and its dependencies).
+
+By default, it will give the installed size of the package, its exclusive
+dependencies, and its shared dependencies; Optional dependencies can be
+included as well. See L<B<DEPENDENCY GROUPS>|/DEPENDENCY GROUPS> below 
+
+B<pacdep> searches the local database first, and if not found searches all sync
+databases. Package names are prefixed by the repository name they were found in
+when they're not from the local database.
+
+You can have dependencies of a group listed, in which case the packages name
+and installed size will be shown.
+
+=head2 Package size
+
+After the package's installed size, in parenthesis will be the installed size
+of the package and its exclusive (and optional, if B<--show-optional> was used)
+dependencies.
+
+If the package is from local database (i.e. is installed), only dependencies
+from local databases are taken into account  If it is from a sync database
+(i.e. is not installed), only dependencies from sync databases are taken into
+account.
+
+In other words, this size represents either the size the package and its
+dependencies are using on the system (size that could potentially be freed if
+removing the package and its dependencies), or the size needed to install them.
+
+=head1 DEPENDENCY GROUPS
+
+Packages marked as explicitly installed are ignored by default as dependencies.
+You can use option B<--explicit> to count them in, in which case they'll be
+listed under special groups (e.g. "shared explicit dependencies").
+
+Dependencies are classified in the following groups :
+
+=head2 Exclusive dependencies
+
+Dependencies are considered to be exclusive when either no other packages
+depends on them, or those who do are not installed, or are exclusive or
+optional dependencies.
+
+=head2 Optional depedencies
+
+Optional dependencies are listed according to how many times option
+B<--show-optional> is used :
+
+- Once, only optional dependencies that aren't required by another package
+  installed (and outside the tree of dependencies, see B<NOTES> below).
+
+- Twice, include dependencies required by other installed packages.
+
+- Three times, include non-installed dependencies as well.
+
+=head2 Shared dependencies
+
+Dependencies are considered shared when they are required by at least one other
+package installed on the system that isn't an optional or exclusive dependency.
+
+=head1 NOTES
+
+Any packages present in the dependency tree will be shown, even if it would
+otherwise fail those criteria. For example, say "mkinitcpio" has "xz" as
+optional dependency, "xz" is also a dependency of "systemd" and all three
+packages are installed.
+
+Running `pacdep -o mkinitcpio` would list "xz" as optional dependency, even
+though it is required by another package ("systemd"), because it is also a
+dependency of "libarchive" which is itself a dependency of "mkinitcpio"; In
+other words "xz" was going to be listed anyway, so it simply switched group,
+from shared to optional dependencies.
+
+=head1 BUGS
+
+They're probably crawling somewhere in there... if you happen to catch one (or
+more), report it and I'll do my best to squash it.
+
+=head1 REPOSITORY
+
+You can find the latest source code of B<pacdep> as well as report bugs and/or
+suggest features on its GitHub repository, available at
+L<https://github.com/jjk-jacky/pacdep>
+
+=head1 AUTHOR
+
+=over
+
+=item Olivier Brunel <i.am.jack.mail AT gmail DOT com>
+
+=back
+

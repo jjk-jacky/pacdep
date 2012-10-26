@@ -190,6 +190,7 @@ show_help (const char *prgname)
     putchar ('\n');
     puts (" -d, --debug                     Flood debug info to stdout");
     puts (" -c, --config=FILE               pacman.conf file to use (else /etc/pacman.conf)");
+    puts (" -d, --dbpath=PATH               Specify an alternate database location");
     putchar ('\n');
     puts (" -e, --list-exclusive            List exclusive dependencies");
     puts (" -E, --list-exclusive-explicit   List exclusive explicit dependencies");
@@ -487,7 +488,10 @@ cleanup:
 
 
 static int
-alpm_load (alpm_handle_t **handle, const char *conffile, char **error)
+alpm_load (alpm_handle_t **handle,
+        const char *conffile,
+        const char *dbpath,
+        char **error)
 {
     int                  rc = E_OK;
     enum _alpm_errno_t   err;
@@ -500,6 +504,13 @@ alpm_load (alpm_handle_t **handle, const char *conffile, char **error)
     {
         free_pacman_config (pac_conf);
         return rc;
+    }
+
+    /* --dbpath override */
+    if (dbpath)
+    {
+        pac_conf->dbpath = strdup (dbpath);
+        debug ("cmdline: dbpath: %s\n", dbpath);
     }
 
     /* init libalpm */
@@ -1001,6 +1012,7 @@ int
 main (int argc, char *argv[])
 {
     const char *conffile = PACMAN_CONFFILE;
+    const char *dbpath   = NULL;
 
     memset (&config, 0, sizeof (config_t));
 
@@ -1011,6 +1023,7 @@ main (int argc, char *argv[])
         { "version",                    no_argument,        0,  'V' },
         { "debug",                      no_argument,        0,  'd' },
         { "config",                     required_argument,  0,  'c' },
+        { "dbpath",                     required_argument,  0,  'b' },
         { "list-exclusive",             no_argument,        0,  'e' },
         { "list-exclusive-explicit",    no_argument,        0,  'E' },
         { "list-shared",                no_argument,        0,  's' },
@@ -1023,7 +1036,7 @@ main (int argc, char *argv[])
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:eEsSpoOx", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:eEsSpoOx", options, &index);
         if (o == -1)
         {
             break;
@@ -1044,6 +1057,9 @@ main (int argc, char *argv[])
                 break;
             case 'c':
                 conffile = optarg;
+                break;
+            case 'b':
+                dbpath = optarg;
                 break;
             case 'e':
                 config.list_exclusive = true;
@@ -1098,7 +1114,7 @@ main (int argc, char *argv[])
     char *error;
     int rc;
 
-    rc = alpm_load (&config.alpm, conffile, &error);
+    rc = alpm_load (&config.alpm, conffile, dbpath, &error);
     if (rc != E_OK)
     {
         fprintf (stderr, "Error: %s", error);

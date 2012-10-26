@@ -14,6 +14,10 @@ B<pacdep> [I<OPTION>..] I<PACKAGE>..
 
 Use B<FILE> to configure ALPM instead of I</etc/pacman.conf>
 
+=item B<-d, --dbpath=PATH>
+
+Specify an alternate database location
+
 =item B<-d, --debug>
 
 Flood debug info to stdout

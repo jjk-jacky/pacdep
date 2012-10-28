@@ -85,6 +85,9 @@ Show a little help screen and exit
 B<pacdep> is a small tool that will allow you to quickly see how much space is
 being used/required by a package (and its dependencies).
 
+You can use a single dash (-) as package name, to have package names be read
+from stdin.
+
 By default, it will give the installed size of the package, its exclusive
 dependencies, and its shared dependencies; Optional dependencies can be
 included as well. See L<B<DEPENDENCY GROUPS>|/DEPENDENCY GROUPS> below 

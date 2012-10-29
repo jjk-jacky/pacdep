@@ -7,6 +7,7 @@
 #include <string.h>
 #include <glob.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include <alpm_list.h>
 #include <alpm.h>
@@ -80,15 +81,15 @@ typedef struct _config_t {
     alpm_list_t     *localdb;
     alpm_list_t     *syncdbs;
 
-    unsigned int     is_debug : 1;
-    unsigned int     explicit : 1;
-    unsigned int     list_exclusive : 1;
-    unsigned int     list_exclusive_explicit : 1;
-    unsigned int     list_shared : 1;
-    unsigned int     list_shared_explicit : 1;
+    bool             is_debug : 1;
+    bool             explicit : 1;
+    bool             list_exclusive : 1;
+    bool             list_exclusive_explicit : 1;
+    bool             list_shared : 1;
+    bool             list_shared_explicit : 1;
     unsigned int     show_optional : 2;
-    unsigned int     list_optional : 1;
-    unsigned int     list_optional_explicit : 1;
+    bool             list_optional : 1;
+    bool             list_optional_explicit : 1;
 } config_t;
 
 static config_t config;
@@ -664,7 +665,7 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
 }
 
 static dep_t
-_get_dep_explicit (pkg_t *pkg, dep_t dep)
+get_dep_explicit (pkg_t *pkg, dep_t dep)
 {
     if (!config.explicit || dep == DEP_UNKNOWN)
     {
@@ -711,7 +712,7 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
                 continue;
             }
 
-            d = _get_dep_explicit (pkg, DEP_SHARED);
+            d = get_dep_explicit (pkg, DEP_SHARED);
             debug ("%s=%d: required by outsider: %s\n",
                     pkg->name,
                     d,
@@ -722,7 +723,7 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
         else if (p->dep == DEP_SHARED || p->dep == DEP_SHARED_EXPLICIT)
         {
             /* required by a shared dep */
-            d = _get_dep_explicit (pkg, DEP_SHARED);
+            d = get_dep_explicit (pkg, DEP_SHARED);
             debug ("%s=%d: required by shared dep (%s=%d)\n",
                     pkg->name,
                     d,
@@ -752,7 +753,7 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
                             p,
                             (alpm_list_fn_cmp) pkg_find_pkg_fn,
                             NULL);
-                    d = _get_dep_explicit (pkg, DEP_SHARED);
+                    d = get_dep_explicit (pkg, DEP_SHARED);
                     debug ("%s=%d\n", pkg->name, d);
                     FREELIST (reqs);
                     return d;
@@ -773,7 +774,7 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
     }
     FREELIST (reqs);
 
-    d = _get_dep_explicit (pkg, DEP_EXCLUSIVE);
+    d = get_dep_explicit (pkg, DEP_EXCLUSIVE);
     debug ("%s=%d\n", pkg->name, d);
     return d;
 }
@@ -860,7 +861,7 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
         {
             dep_t d;
 
-            d = _get_dep_explicit (p, DEP_SHARED);
+            d = get_dep_explicit (p, DEP_SHARED);
             set_pkg_dep (data, refs, p, d);
         }
         else
@@ -1039,24 +1040,24 @@ main (int argc, char *argv[])
                 /* not reached */
                 break;
             case 'd':
-                config.is_debug = 1;
+                config.is_debug = true;
                 break;
             case 'c':
                 conffile = optarg;
                 break;
             case 'e':
-                config.list_exclusive = 1;
+                config.list_exclusive = true;
                 break;
             case 'E':
-                config.list_exclusive_explicit = 1;
-                config.explicit = 1;
+                config.list_exclusive_explicit = true;
+                config.explicit = true;
                 break;
             case 's':
-                config.list_shared = 1;
+                config.list_shared = true;
                 break;
             case 'S':
-                config.list_shared_explicit = 1;
-                config.explicit = 1;
+                config.list_shared_explicit = true;
+                config.explicit = true;
                 break;
             case 'p':
                 if (config.show_optional >= 3)
@@ -1068,14 +1069,14 @@ main (int argc, char *argv[])
                 config.show_optional++;
                 break;
             case 'o':
-                config.list_optional = 1;
+                config.list_optional = true;
                 break;
             case 'O':
-                config.list_optional_explicit = 1;
-                config.explicit = 1;
+                config.list_optional_explicit = true;
+                config.explicit = true;
                 break;
             case 'x':
-                config.explicit = 1;
+                config.explicit = true;
                 break;
             case '?': /* unknown option */
             default:

@@ -10,6 +10,18 @@ B<pacdep> [I<OPTION>..] I<PACKAGE>..
 
 =over
 
+=item B<-h, --help>
+
+Show a little help screen and exit
+
+=item B<-V, --version>
+
+Show version information and exit
+
+=item B<-d, --debug>
+
+Flood debug info to stdout
+
 =item B<-c, --config=FILE>
 
 Use B<FILE> to configure ALPM instead of I</etc/pacman.conf>
@@ -18,9 +30,17 @@ Use B<FILE> to configure ALPM instead of I</etc/pacman.conf>
 
 Specify an alternate database location
 
-=item B<-d, --debug>
+=item B<--from-sync>
 
-Flood debug info to stdout
+Only look for specified package(s) in sync databases. By default pacdep looks in
+the locap database first, and if not found then looks in sync databases.
+
+While this should be good most of the times, it doesn't allow to get information
+about a package from sync databases, if said package is not installed but
+another package, acting as provider, is.
+
+Note that this does not affect the search for providers of dependencies, only
+of the package(s) specified on command line (or stdin).
 
 =item B<-e, --list-exclusive>
 
@@ -69,14 +89,6 @@ include it as many times as needed (i.e. 2 or 3)
 =item B<-x, --explicit>
 
 Don't ignore explicitly installed dependencies
-
-=item B<-V, --version>
-
-Show version information and exit
-
-=item B<-h, --help>
-
-Show a little help screen and exit
 
 =back
 
@@ -138,7 +150,8 @@ B<--show-optional> is used :
 
 - Twice, include dependencies required by other installed packages.
 
-- Three times, include non-installed dependencies as well.
+- Three times, include non-installed dependencies as well. (Explicitly installed
+  dependencies are also automatically included.)
 
 =head2 Shared dependencies
 

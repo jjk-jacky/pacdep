@@ -103,6 +103,7 @@ typedef struct _config_t {
 
     bool             is_debug : 1;
     bool             explicit : 1;
+    bool             from_sync : 1;
     bool             list_exclusive : 1;
     bool             list_exclusive_explicit : 1;
     bool             list_shared : 1;
@@ -211,6 +212,7 @@ show_help (const char *prgname)
     puts (" -d, --debug                     Flood debug info to stdout");
     puts (" -c, --config=FILE               pacman.conf file to use (else /etc/pacman.conf)");
     puts (" -d, --dbpath=PATH               Specify an alternate database location");
+    puts ("     --from-sync                 Only look for specified package(s) in sync dbs");
     putchar ('\n');
     puts (" -e, --list-exclusive            List exclusive dependencies");
     puts (" -E, --list-exclusive-explicit   List exclusive explicit dependencies");
@@ -1032,14 +1034,17 @@ static void
 process_package (const char *name)
 {
     data_t      data;
-    alpm_pkg_t *pkg;
+    alpm_pkg_t *pkg = NULL;
     const char *s;
 
     memset (&data, 0, sizeof (data_t));
 
-    /* seach all dbs (local, then sync) and find match even the name
-     * was a provider */
-    pkg = alpm_find_dbs_satisfier (config.alpm, config.localdb, name);
+    if (!config.from_sync)
+    {
+        /* seach all dbs (local, then sync) and find match even the name
+         * was a provider */
+        pkg = alpm_find_dbs_satisfier (config.alpm, config.localdb, name);
+    }
     if (!pkg)
     {
         pkg = alpm_find_dbs_satisfier (config.alpm, config.syncdbs, name);
@@ -1402,6 +1407,7 @@ main (int argc, char *argv[])
         { "debug",                      no_argument,        0,  'd' },
         { "config",                     required_argument,  0,  'c' },
         { "dbpath",                     required_argument,  0,  'b' },
+        { "from-sync",                  no_argument,        0,  'Y' },
         { "list-exclusive",             no_argument,        0,  'e' },
         { "list-exclusive-explicit",    no_argument,        0,  'E' },
         { "list-shared",                no_argument,        0,  's' },
@@ -1438,6 +1444,9 @@ main (int argc, char *argv[])
                 break;
             case 'b':
                 dbpath = optarg;
+                break;
+            case 'Y':
+                config.from_sync = true;
                 break;
             case 'e':
                 config.list_exclusive = true;

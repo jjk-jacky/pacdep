@@ -51,7 +51,6 @@ enum {
     E_NOMEM,
     E_FILEREAD,
     E_PARSING,
-    E_NOPKG,
     E_ALPM,
 };
 
@@ -1481,7 +1480,9 @@ main (int argc, char *argv[])
     if (optind == argc)
     {
         fprintf (stderr, "Missing package name(s)\n");
-        return E_NOPKG;
+        show_help (argv[0]);
+        /* not reached */
+        return 0;
     }
     /* options -o/-O implies -p */
     if ((config.list_optional || config.list_optional_explicit)

@@ -632,7 +632,7 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
     if (p)
     {
         debug ("%s already in deps\n", alpm_pkg_get_name (pkg));
-        return NULL;
+        return p;
     }
 
     p = malloc (sizeof (*p));

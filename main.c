@@ -75,7 +75,9 @@ typedef enum {
 } dep_t;
 
 typedef struct _pkg_t {
-    const char  *name;
+    const char  *name_asked;    /* from cmdline */
+    const char  *name;          /* can be a provider */
+    bool         is_provided;
     const char  *repo;
     alpm_pkg_t  *pkg;
     alpm_list_t *deps;
@@ -90,8 +92,16 @@ typedef struct _group_t {
     int          len_max;
 } group_t;
 
+typedef enum {
+    SCE_UNKNOWN = 0,
+    SCE_LOCAL,
+    SCE_SYNC,
+    SCE_MIXED
+} source_t;
+
 typedef struct _data_t {
-    pkg_t       *pkg;
+    alpm_list_t *pkgs;
+    source_t     source;
     group_t      group[NB_DEPS];
     alpm_list_t *deps;
 } data_t;
@@ -838,7 +848,7 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
         return;
     }
     /* size & list are only done for dependencies, not the main package */
-    if (pkg != data->pkg)
+    if (!alpm_list_find_ptr (data->pkgs, pkg))
     {
         if (pkg->dep != DEP_UNKNOWN)
         {
@@ -919,7 +929,7 @@ free_pkg (pkg_t *pkg)
     free (pkg);
 }
 
-static inline void
+static void
 list_dependencies (data_t *data, dep_t dep)
 {
     alpm_list_t *i;
@@ -1031,64 +1041,69 @@ print_group (data_t *data,
 }
 
 static void
-process_package (const char *name)
+preprocess_package (data_t *data, const char *pkgname)
 {
-    data_t      data;
-    alpm_pkg_t *pkg = NULL;
-    const char *s;
-
-    memset (&data, 0, sizeof (data_t));
+    alpm_pkg_t  *pkg = NULL;
+    pkg_t       *p;
 
     if (!config.from_sync)
     {
         /* seach all dbs (local, then sync) and find match even the name
          * was a provider */
-        pkg = alpm_find_dbs_satisfier (config.alpm, config.localdb, name);
+        pkg = alpm_find_dbs_satisfier (config.alpm, config.localdb, pkgname);
     }
     if (!pkg)
     {
-        pkg = alpm_find_dbs_satisfier (config.alpm, config.syncdbs, name);
+        pkg = alpm_find_dbs_satisfier (config.alpm, config.syncdbs, pkgname);
     }
     if (!pkg)
     {
-        fprintf (stderr, "Package not found: %s\n", name);
+        fprintf (stderr, "Package not found: %s\n", pkgname);
         return;
     }
 
-    int is_provided  = 0;
-    int len_max      = 0;
-
-    /* package */
-    s = alpm_pkg_get_name (pkg);
-    if (strcmp (name, s) == 0)
+    debug ("create list of all dependencies for %s\n", pkgname);
+    p = add_to_deps (data, pkg);
+    p->name_asked = pkgname;
+    /* mark exclusive right now, so when dependencies are sorted out all
+     * "main" packages are seen as exclusive */
+    p->dep = DEP_EXCLUSIVE;
+    if (p->repo)
     {
-        len_max = (int) strlen (name) + 1;
+        if (data->source == SCE_UNKNOWN)
+        {
+            data->source = SCE_SYNC;
+        }
+        else if (data->source == SCE_LOCAL)
+        {
+            data->source = SCE_MIXED;
+        }
     }
     else
     {
-        is_provided = 1;
-        len_max = (int) strlen (s) + 1;
-        /* 16 == strlen (" is provided by ") */
-        len_max += (int) strlen (name) + 16;
+        if (data->source == SCE_UNKNOWN)
+        {
+            data->source = SCE_LOCAL;
+        }
+        else if (data->source == SCE_SYNC)
+        {
+            data->source = SCE_MIXED;
+        }
     }
-    if (alpm_pkg_get_origin (pkg) == PKG_FROM_SYNCDB)
+    /* in case the same package is listed twice on cmdline */
+    if (alpm_list_find_ptr (data->pkgs, p))
     {
-        /* +1 for the / */
-        len_max += 1 + (int) strlen (
-                alpm_db_get_name (alpm_pkg_get_db (pkg)));
+        return;
     }
+    data->pkgs = alpm_list_add (data->pkgs, p);
 
-    alpm_list_t *i;
-    pkg_t *p;
-
-    debug ("create list of all dependencies\n");
-    data.pkg = add_to_deps (&data, pkg);
     if (config.show_optional)
     {
-        debug ("add optional dependencies\n");
+        alpm_list_t *i;
+
+        debug ("add %s's optional dependencies\n", pkgname);
         for (i = alpm_pkg_get_optdepends (pkg); i; i = alpm_list_next (i))
         {
-            alpm_pkg_t *pkg;
             char *name = i->data;
             char *s;
 
@@ -1157,7 +1172,7 @@ process_package (const char *name)
                 {
                     const char *name = j->data;
 
-                    p = alpm_list_find (data.deps,
+                    p = alpm_list_find (data->deps,
                             name,
                             (alpm_list_fn_cmp) pkg_find_name_fn);
                     if (!p)
@@ -1182,212 +1197,8 @@ process_package (const char *name)
                 }
             }
 
-            add_to_deps (&data, pkg);
+            add_to_deps (data, pkg);
         }
-    }
-    debug ("determine dependencies type (exclusive/shared)\n");
-    set_pkg_dep (&data, NULL, data.pkg, DEP_EXCLUSIVE);
-    if (config.show_optional)
-    {
-        for (i = alpm_pkg_get_optdepends (data.pkg->pkg);
-                i;
-                i = alpm_list_next (i))
-        {
-            char *name = i->data;
-            char *s;
-
-            /* optdepends are info strings: "package: some desc" */
-            s = strchr (name, ':');
-            if (s)
-            {
-                *s = '\0';
-            }
-
-            /* if it's in data.deps it is a optdep to list/count as such */
-            p = alpm_list_find (data.deps,
-                    name,
-                    (alpm_list_fn_cmp) pkg_find_name_fn);
-            if (s)
-            {
-                *s = ':';
-            }
-            if (!p)
-            {
-                continue;
-            }
-
-            dep_t dep;
-
-            if (!config.explicit)
-            {
-                dep = DEP_OPTIONAL;
-            }
-            else
-            {
-                if (!p->repo
-                        && alpm_pkg_get_reason (p->pkg) == ALPM_PKG_REASON_EXPLICIT)
-                {
-                    dep = DEP_OPTIONAL_EXPLICIT;
-                }
-                else
-                {
-                    dep = DEP_OPTIONAL;
-                }
-            }
-            set_pkg_dep (&data, NULL, p, dep);
-        }
-    }
-    /* put the package size under DEP_UNKNOWN (not used otherwise) */
-    data.group[DEP_UNKNOWN].size_local = alpm_pkg_get_isize (data.pkg->pkg);
-
-    /* exclusive dependencies */
-    data.group[DEP_UNKNOWN].title            = "Total dependencies:";
-    data.group[DEP_EXCLUSIVE].title          = "Exclusive dependencies:";
-    data.group[DEP_EXCLUSIVE_EXPLICIT].title = "Exclusive explicit dependencies:";
-    data.group[DEP_OPTIONAL].title           = "Optional dependencies:";
-    data.group[DEP_OPTIONAL_EXPLICIT].title  = "Optional explicit dependencies:";
-    data.group[DEP_SHARED].title             = "Shared dependencies:";
-    data.group[DEP_SHARED_EXPLICIT].title    = "Shared explicit dependencies:";
-
-    int len = (int) strlen (data.group[DEP_UNKNOWN].title) + 1;
-    if (len > len_max)
-    {
-        len_max = len;
-    }
-
-    const char **t, *titles[] = { data.group[DEP_EXCLUSIVE].title,
-        data.group[DEP_EXCLUSIVE_EXPLICIT].title,
-        data.group[DEP_OPTIONAL].title,
-        data.group[DEP_OPTIONAL_EXPLICIT].title,
-        data.group[DEP_SHARED].title,
-        data.group[DEP_SHARED_EXPLICIT].title,
-        NULL
-    };
-    for (t = titles; *t; ++t)
-    {
-        if ((t - titles) % 2 && !config.explicit)
-        {
-            continue;
-        }
-        int len = (int) strlen (*t) + 1;
-        if (len > len_max)
-        {
-            len_max = len;
-        }
-    }
-
-    /* printing results */
-    off_t size_exclusive = data.group[DEP_EXCLUSIVE].size
-        + data.group[DEP_EXCLUSIVE_EXPLICIT].size;
-    off_t size_shared = data.group[DEP_SHARED].size
-        + data.group[DEP_SHARED_EXPLICIT].size;
-    off_t size_optional = data.group[DEP_OPTIONAL].size
-        + data.group[DEP_OPTIONAL_EXPLICIT].size;
-
-    /* package */
-    if (data.pkg->repo)
-    {
-        if (!is_provided)
-        {
-            fprintf (stdout, "%s/%*s",
-                    data.pkg->repo,
-                    -len_max + (int) strlen (data.pkg->repo) + 1,
-                    name);
-        }
-        else
-        {
-            fprintf (stdout, "%s is provided by %s/%*s",
-                    name,
-                    data.pkg->repo,
-                    -len_max + (int) strlen (name) + 16
-                    + (int) strlen (data.pkg->repo) + 1,
-                    data.pkg->name);
-        }
-    }
-    else if (!is_provided)
-    {
-        fprintf (stdout, "%*s", -len_max, name);
-    }
-    else
-    {
-        fprintf (stdout, "%s is provided by %*s",
-                name,
-                -len_max + (int) strlen (name) + 16,
-                data.pkg->name);
-    }
-    print_size (data.group[DEP_UNKNOWN].size_local);
-    /* pkg size + exclusive & optional deps of its kind (local/sync) */
-    data.group[DEP_UNKNOWN].size = data.group[DEP_EXCLUSIVE].size_local
-        + data.group[DEP_EXCLUSIVE_EXPLICIT].size_local
-        + data.group[DEP_OPTIONAL].size_local
-        + data.group[DEP_OPTIONAL_EXPLICIT].size_local;
-    if (data.pkg->repo)
-    {
-        data.group[DEP_UNKNOWN].size *= -1;
-        data.group[DEP_UNKNOWN].size += data.group[DEP_EXCLUSIVE].size
-            + data.group[DEP_EXCLUSIVE_EXPLICIT].size
-            + data.group[DEP_OPTIONAL].size
-            + data.group[DEP_OPTIONAL_EXPLICIT].size;
-    }
-    data.group[DEP_UNKNOWN].size += data.group[DEP_UNKNOWN].size_local;
-    if (data.group[DEP_UNKNOWN].size > data.group[DEP_UNKNOWN].size_local)
-    {
-        fputs (" (", stdout);
-        print_size (data.group[DEP_UNKNOWN].size);
-        fputs (")\n", stdout);
-    }
-    else
-    {
-        fputc ('\n', stdout);
-    }
-
-    /* exclusive deps */
-    print_group (&data,
-            DEP_EXCLUSIVE,
-            len_max,
-            size_exclusive,
-            config.list_exclusive,
-            config.list_exclusive_explicit);
-
-    if (config.show_optional)
-    {
-        /* optional deps */
-        print_group (&data,
-                DEP_OPTIONAL,
-                len_max,
-                size_optional,
-                config.list_optional,
-                config.list_optional_explicit);
-    }
-
-    /* shared deps */
-    print_group (&data,
-            DEP_SHARED,
-            len_max,
-            size_shared,
-            config.list_shared,
-            config.list_shared_explicit);
-
-    /* total deps */
-    fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
-    print_size (size_exclusive + size_shared + size_optional);
-    fputs (" (", stdout);
-    print_size (data.group[DEP_UNKNOWN].size_local
-            + size_exclusive
-            + size_shared
-            + size_optional);
-    fputs (")\n", stdout);
-
-    /* free list of deps */
-    alpm_list_free_inner (data.deps, (alpm_list_fn_free) free_pkg);
-    alpm_list_free (data.deps);
-    data.deps = NULL;
-
-    /* free groups list of packages */
-    int d;
-    for (d = 0; d < NB_DEPS; ++d)
-    {
-        alpm_list_free (data.group[d].pkgs);
     }
 }
 
@@ -1501,20 +1312,23 @@ main (int argc, char *argv[])
     }
 
     char *error;
-    int i;
+    int rc;
 
-    i = alpm_load (&config.alpm, conffile, dbpath, &error);
-    if (i != E_OK)
+    rc = alpm_load (&config.alpm, conffile, dbpath, &error);
+    if (rc != E_OK)
     {
         fprintf (stderr, "Error: %s", error);
         free (error);
-        return i;
+        return rc;
     }
 
     config.localdb = alpm_list_add (NULL, alpm_option_get_localdb (config.alpm));
     config.syncdbs = alpm_option_get_syncdbs (config.alpm);
 
-    while (optind < argc)
+    data_t data;
+
+    memset (&data, 0, sizeof (data_t));
+    for ( ; optind < argc; ++optind)
     {
         /* "-" as package name can be used to read from stdin */
         if (argv[optind][0] == '-' && argv[optind][1] == '\0')
@@ -1524,6 +1338,7 @@ main (int argc, char *argv[])
             char     c;
             size_t   alloc  = BUF_LEN;
             size_t   len    = 0;
+            int      n      = 0;
 
             name = malloc (sizeof (*name) * alloc);
             if (!name)
@@ -1531,7 +1346,6 @@ main (int argc, char *argv[])
                 fprintf (stderr, "Error: out of memory\n");
                 goto release;
             }
-            i = 0;
             s = name;
             while ((c = (char) fgetc (stdin)))
             {
@@ -1540,11 +1354,11 @@ main (int argc, char *argv[])
                     if (s > name)
                     {
                         *s = '\0';
-                        if (i++ > 0)
+                        if (n++ > 0)
                         {
                             fputc ('\n', stdout);
                         }
-                        process_package (name);
+                        preprocess_package (&data, name);
                         s = name;
                         len = 0;
                     }
@@ -1568,17 +1382,274 @@ main (int argc, char *argv[])
         }
         else
         {
-            process_package (argv[optind]);
+            preprocess_package (&data, argv[optind]);
+        }
+    }
+
+    data.group[DEP_UNKNOWN].title            = "Total dependencies:";
+    data.group[DEP_EXCLUSIVE].title          = "Exclusive dependencies:";
+    data.group[DEP_EXCLUSIVE_EXPLICIT].title = "Exclusive explicit dependencies:";
+    data.group[DEP_OPTIONAL].title           = "Optional dependencies:";
+    data.group[DEP_OPTIONAL_EXPLICIT].title  = "Optional explicit dependencies:";
+    data.group[DEP_SHARED].title             = "Shared dependencies:";
+    data.group[DEP_SHARED_EXPLICIT].title    = "Shared explicit dependencies:";
+
+    int len_max     = 0;
+    int len         = (int) strlen (data.group[DEP_UNKNOWN].title) + 1;
+    if (len > len_max)
+    {
+        len_max = len;
+    }
+
+    const char **t, *titles[] = { data.group[DEP_EXCLUSIVE].title,
+        data.group[DEP_EXCLUSIVE_EXPLICIT].title,
+        data.group[DEP_OPTIONAL].title,
+        data.group[DEP_OPTIONAL_EXPLICIT].title,
+        data.group[DEP_SHARED].title,
+        data.group[DEP_SHARED_EXPLICIT].title,
+        NULL
+    };
+    for (t = titles; *t; ++t)
+    {
+        if ((t - titles) % 2 && !config.explicit)
+        {
+            continue;
+        }
+        len = (int) strlen (*t) + 1;
+        if (len > len_max)
+        {
+            len_max = len;
+        }
+    }
+
+    /* all packages and their deps are known. time to "sort" everything */
+    alpm_list_t *i;
+    for (i = data.pkgs; i; i = alpm_list_next (i))
+    {
+        pkg_t *pkg = i->data;
+
+        /* calculate len_max to show package name (/w repo/provided if apply) */
+        if (strcmp (pkg->name_asked, pkg->name) == 0)
+        {
+            pkg->is_provided = 0;
+            len = (int) strlen (pkg->name_asked) + 1;
+        }
+        else
+        {
+            pkg->is_provided = 1;
+            len = (int) strlen (pkg->name) + 1;
+            /* 16 == strlen (" is provided by ") */
+            len += (int) strlen (pkg->name_asked) + 16;
+        }
+        if (pkg->repo)
+        {
+            /* +1 for the / */
+            len += 1 + (int) strlen (pkg->repo);
+        }
+        if (len > len_max)
+        {
+            len_max = len;
         }
 
-        /* next */
-        if (++optind < argc)
+        debug ("determine dependencies type (exclusive/shared)\n");
+        /* restore to DEP_UNKNOWN so it's fully processed */
+        pkg->dep = DEP_UNKNOWN;
+        set_pkg_dep (&data, NULL, pkg, DEP_EXCLUSIVE);
+        if (config.show_optional)
+        {
+            alpm_list_t *j;
+
+            for (j = alpm_pkg_get_optdepends (pkg->pkg);
+                    j;
+                    j = alpm_list_next (j))
+            {
+                char *name = j->data;
+                char *s;
+                pkg_t *p;
+
+                /* optdepends are info strings: "package: some desc" */
+                s = strchr (name, ':');
+                if (s)
+                {
+                    *s = '\0';
+                }
+
+                /* if it's in data.deps it is an optdep to list/count as such */
+                p = alpm_list_find (data.deps,
+                        name,
+                        (alpm_list_fn_cmp) pkg_find_name_fn);
+                if (s)
+                {
+                    *s = ':';
+                }
+                if (!p)
+                {
+                    continue;
+                }
+
+                dep_t dep;
+
+                if (!config.explicit)
+                {
+                    dep = DEP_OPTIONAL;
+                }
+                else
+                {
+                    if (!p->repo
+                            && alpm_pkg_get_reason (p->pkg) == ALPM_PKG_REASON_EXPLICIT)
+                    {
+                        dep = DEP_OPTIONAL_EXPLICIT;
+                    }
+                    else
+                    {
+                        dep = DEP_OPTIONAL;
+                    }
+                }
+                set_pkg_dep (&data, NULL, p, dep);
+            }
+        }
+        /* put the package size under DEP_UNKNOWN (not used otherwise) */
+        data.group[DEP_UNKNOWN].size_local += alpm_pkg_get_isize (pkg->pkg);
+    }
+
+    off_t size_exclusive = data.group[DEP_EXCLUSIVE].size
+        + data.group[DEP_EXCLUSIVE_EXPLICIT].size;
+    off_t size_shared = data.group[DEP_SHARED].size
+        + data.group[DEP_SHARED_EXPLICIT].size;
+    off_t size_optional = data.group[DEP_OPTIONAL].size
+        + data.group[DEP_OPTIONAL_EXPLICIT].size;
+
+    int nb_pkg = (int) alpm_list_count (data.pkgs);
+    for (i = data.pkgs; i; i = alpm_list_next (i))
+    {
+        pkg_t *pkg = i->data;
+
+        if (pkg->repo)
+        {
+            if (!pkg->is_provided)
+            {
+                fprintf (stdout, "%s/%*s",
+                        pkg->repo,
+                        -len_max + (int) strlen (pkg->repo) + 1,
+                        pkg->name_asked);
+            }
+            else
+            {
+                fprintf (stdout, "%s is provided by %s/%*s",
+                        pkg->name_asked,
+                        pkg->repo,
+                        -len_max + (int) strlen (pkg->name_asked) + 16
+                            + (int) strlen (pkg->repo) + 1,
+                        pkg->name);
+            }
+        }
+        else if (!pkg->is_provided)
+        {
+            fprintf (stdout, "%*s", -len_max, pkg->name_asked);
+        }
+        else
+        {
+            fprintf (stdout, "%s is provided by %*s",
+                    pkg->name_asked,
+                    -len_max + (int) strlen (pkg->name_asked) + 16,
+                    pkg->name);
+        }
+        print_size (alpm_pkg_get_isize (pkg->pkg));
+
+        /* more than one pkg, no package size -- it'll be on a new line, since
+         * it's a combined size for all packages */
+        if (nb_pkg > 1)
         {
             fputc ('\n', stdout);
         }
     }
 
+    /* package size doesn't apply with SCE_MIXED */
+    if (data.source != SCE_MIXED)
+    {
+        if (nb_pkg > 1)
+        {
+            fprintf (stdout, "%*s", -len_max, "");
+            print_size (data.group[DEP_UNKNOWN].size_local);
+        }
+
+        /* pkg size + exclusive & optional deps of its kind (local/sync) */
+        data.group[DEP_UNKNOWN].size = data.group[DEP_EXCLUSIVE].size_local
+            + data.group[DEP_EXCLUSIVE_EXPLICIT].size_local
+            + data.group[DEP_OPTIONAL].size_local
+            + data.group[DEP_OPTIONAL_EXPLICIT].size_local;
+        if (data.source == SCE_SYNC)
+        {
+            data.group[DEP_UNKNOWN].size *= -1;
+            data.group[DEP_UNKNOWN].size += data.group[DEP_EXCLUSIVE].size
+                + data.group[DEP_EXCLUSIVE_EXPLICIT].size
+                + data.group[DEP_OPTIONAL].size
+                + data.group[DEP_OPTIONAL_EXPLICIT].size;
+        }
+        data.group[DEP_UNKNOWN].size += data.group[DEP_UNKNOWN].size_local;
+        if (data.group[DEP_UNKNOWN].size > data.group[DEP_UNKNOWN].size_local)
+        {
+            fputs (" (", stdout);
+            print_size (data.group[DEP_UNKNOWN].size);
+            fputs (")\n", stdout);
+        }
+        else
+        {
+            fputc ('\n', stdout);
+        }
+    }
+
+    /* exclusive deps */
+    print_group (&data,
+            DEP_EXCLUSIVE,
+            len_max,
+            size_exclusive,
+            config.list_exclusive,
+            config.list_exclusive_explicit);
+
+    if (config.show_optional)
+    {
+        /* optional deps */
+        print_group (&data,
+                DEP_OPTIONAL,
+                len_max,
+                size_optional,
+                config.list_optional,
+                config.list_optional_explicit);
+    }
+
+    /* shared deps */
+    print_group (&data,
+            DEP_SHARED,
+            len_max,
+            size_shared,
+            config.list_shared,
+            config.list_shared_explicit);
+
+    /* total deps */
+    fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
+    print_size (size_exclusive + size_shared + size_optional);
+    fputs (" (", stdout);
+    print_size (data.group[DEP_UNKNOWN].size_local
+            + size_exclusive
+            + size_shared
+            + size_optional);
+    fputs (")\n", stdout);
+
+    /* free list of deps */
+    alpm_list_free_inner (data.deps, (alpm_list_fn_free) free_pkg);
+    alpm_list_free (data.deps);
+    data.deps = NULL;
+
+    /* free groups list of packages */
+    int d;
+    for (d = 0; d < NB_DEPS; ++d)
+    {
+        alpm_list_free (data.group[d].pkgs);
+    }
+
 release:
+    alpm_list_free (data.pkgs);
     debug ("release libalpm\n");
     alpm_release (config.alpm);
     alpm_list_free (config.localdb);

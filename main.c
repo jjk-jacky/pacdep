@@ -52,6 +52,7 @@ enum {
     E_FILEREAD,
     E_PARSING,
     E_ALPM,
+    E_NOTHING,
 };
 
 /* config data loaded from parsing pacman.conf */
@@ -1344,6 +1345,7 @@ main (int argc, char *argv[])
             if (!name)
             {
                 fprintf (stderr, "Error: out of memory\n");
+                rc = E_NOMEM;
                 goto release;
             }
             s = name;
@@ -1384,6 +1386,13 @@ main (int argc, char *argv[])
         {
             preprocess_package (&data, argv[optind]);
         }
+    }
+
+    if (!data.pkgs)
+    {
+        fprintf (stderr, "No package to process\n");
+        rc = E_NOTHING;
+        goto release;
     }
 
     data.group[DEP_UNKNOWN].title            = "Total dependencies:";
@@ -1653,6 +1662,6 @@ release:
     debug ("release libalpm\n");
     alpm_release (config.alpm);
     alpm_list_free (config.localdb);
-    return 0;
+    return rc;
 }
 

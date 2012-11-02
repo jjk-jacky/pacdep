@@ -145,6 +145,8 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep);
     }                                    \
 } while (0)
 
+#define FOR_LIST(i, val)    for (i = val; i; i = i->next)
+
 
 static void
 debug (const char *fmt, ...)
@@ -583,7 +585,7 @@ alpm_load (alpm_handle_t **handle,
 
     /* now we need to add dbs */
     alpm_list_t *i;
-    for (i = pac_conf->databases; i; i = alpm_list_next (i))
+    FOR_LIST (i, pac_conf->databases)
     {
         char *db_name = i->data;
         alpm_db_t *db;
@@ -697,7 +699,7 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
     p = new_package (data, pkg);
 
     /* go through dep tree to list all dependencies involved */
-    for (i = alpm_pkg_get_depends (pkg); i; i = alpm_list_next (i))
+    FOR_LIST (i, alpm_pkg_get_depends (pkg))
     {
         char        *n = alpm_dep_compute_string (i->data);
         alpm_pkg_t  *dep;
@@ -771,7 +773,7 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
 
     debug ("compute dep state for %s\n", pkg->name);
     reqs = alpm_pkg_compute_requiredby (pkg->pkg);
-    for (i = reqs; i; i = alpm_list_next (i))
+    FOR_LIST (i, reqs)
     {
         const char *name = i->data;
 
@@ -920,7 +922,7 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
             {
                 data->group[pkg->dep].size_local -= alpm_pkg_get_isize (pkg->pkg);
             }
-            for (i = data->group[pkg->dep].pkgs; i; i = alpm_list_next (i))
+            FOR_LIST (i, data->group[pkg->dep].pkgs)
             {
                 if (i->data == pkg)
                 {
@@ -961,7 +963,7 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
     }
     pkg->dep = dep;
 
-    for (i = pkg->deps; i; i = alpm_list_next (i))
+    FOR_LIST (i, pkg->deps)
     {
         pkg_t *p = i->data;
         debug ("%s depends on %s\n", pkg->name, p->name);
@@ -996,17 +998,17 @@ get_pkg_optrequiredby (data_t *data, pkg_t *pkg)
 
     debug ("create list of opt-requirers for %s\n", pkg->name);
     dbs = (pkg->repo) ? config.syncdbs : config.localdb;
-    for (i = dbs; i; i = alpm_list_next (i))
+    FOR_LIST (i, dbs)
     {
         alpm_db_t   *db = i->data;
         alpm_list_t *j;
 
-        for (j = alpm_db_get_pkgcache (db); j; j = alpm_list_next (j))
+        FOR_LIST (j, alpm_db_get_pkgcache (db))
         {
             alpm_pkg_t  *p = j->data;
             alpm_list_t *k;
 
-            for (k = alpm_pkg_get_optdepends (p); k; k = alpm_list_next (k))
+            FOR_LIST (k, alpm_pkg_get_optdepends (p))
             {
                 const char *name  = k->data;
 
@@ -1042,7 +1044,7 @@ get_pkg_requiredby (data_t *data, pkg_t *pkg)
 
     debug ("create list of requirers for %s\n", pkg->name);
     reqs = alpm_pkg_compute_requiredby (pkg->pkg);
-    for (j = reqs; j; j = alpm_list_next (j))
+    FOR_LIST (j, reqs)
     {
         const char *name = j->data;
         pkg_t *r;
@@ -1116,7 +1118,7 @@ list_dependencies (data_t *data, dep_t dep)
         flag = 1;
     }
 
-    for (i = data->group[dep].pkgs; i; i = alpm_list_next (i))
+    FOR_LIST (i, data->group[dep].pkgs)
     {
         pkg_t *p = i->data;
 
@@ -1305,7 +1307,7 @@ preprocess_package (data_t *data, const char *pkgname)
         alpm_list_t *i;
 
         debug ("add %s's optional dependencies\n", pkgname);
-        for (i = alpm_pkg_get_optdepends (pkg); i; i = alpm_list_next (i))
+        FOR_LIST (i, alpm_pkg_get_optdepends (pkg))
         {
             char *name = i->data;
             char *s;
@@ -1371,7 +1373,7 @@ preprocess_package (data_t *data, const char *pkgname)
                 int ignore = 0;
 
                 reqs = alpm_pkg_compute_requiredby (pkg);
-                for (j = reqs; j; j = alpm_list_next (j))
+                FOR_LIST (j, reqs)
                 {
                     const char *name = j->data;
 
@@ -1685,7 +1687,7 @@ main (int argc, char *argv[])
 
     /* all packages and their deps are known. time to "sort" everything */
     alpm_list_t *i;
-    for (i = data.pkgs; i; i = alpm_list_next (i))
+    FOR_LIST (i, data.pkgs)
     {
         pkg_t *pkg = i->data;
 
@@ -1724,9 +1726,7 @@ main (int argc, char *argv[])
             {
                 alpm_list_t *j;
 
-                for (j = alpm_pkg_get_optdepends (pkg->pkg);
-                        j;
-                        j = alpm_list_next (j))
+                FOR_LIST (j, alpm_pkg_get_optdepends (pkg->pkg))
                 {
                     char *name = j->data;
                     char *s;
@@ -1794,7 +1794,7 @@ main (int argc, char *argv[])
         + data.group[DEP_OPTIONAL_EXPLICIT].size;
 
     int nb_pkg = (int) alpm_list_count (data.pkgs);
-    for (i = data.pkgs; i; i = alpm_list_next (i))
+    FOR_LIST (i, data.pkgs)
     {
         pkg_t *pkg = i->data;
 

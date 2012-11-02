@@ -42,6 +42,45 @@ another package, acting as provider, is.
 Note that this does not affect the search for providers of dependencies, only
 of the package(s) specified on command line (or stdin).
 
+=item B<-q, --quiet>
+
+Only output packages name and size. All titles and totals will be omitted. This
+is mostly useful (alongside B<--raw-sizes>) for use in scripts.
+
+The names and sizes of specified packages are still listed first. If no option
+to list dependencies was used, nothing else will be shown.
+
+In case of of the specified name is provided by another package, the line will
+contain the specified name, the package name (provider), and its size.
+
+=item B<-w, --raw-sizes>
+
+Show full sizes in bytes, without any formatting/thousand separator.
+
+=item B<-z, --sort-size>
+
+When listing dependencies, by default packages are sorted (within their groups)
+by names. With this option they'll be sorted by size (descendingly).
+
+=item B<-x, --explicit>
+
+Don't ignore explicitly installed dependencies
+
+=item B<-r, --reverse>
+
+Enable reverse mode, listing packages that require the specified packages
+instead of their dependencies (hence, going through the dependency tree in
+I<reverse>.)
+
+Note that this option can be specified multiple times, and not all options
+apply to this mode, see L<B<REVERSE MODE>|/REVERSE MODE> below for more about
+it.
+
+=item B<-R, --list-requiredby>
+
+List packages requiring specified packages. This only works with, and implies,
+B<--reverse>
+
 =item B<-e, --list-exclusive>
 
 List exclusive dependencies
@@ -86,10 +125,6 @@ List optional explicit dependencies. Implies B<--show-optional> and B<--explicit
 Note that to specify B<--show-optional> multiple times, you still need to
 include it as many times as needed (i.e. 2 or 3)
 
-=item B<-x, --explicit>
-
-Don't ignore explicitly installed dependencies
-
 =back
 
 =head1 DESCRIPTION
@@ -104,9 +139,9 @@ By default, it will give the installed size of the package, its exclusive
 dependencies, and its shared dependencies; Optional dependencies can be
 included as well. See L<B<DEPENDENCY GROUPS>|/DEPENDENCY GROUPS> below 
 
-B<pacdep> searches the local database first, and if not found searches all sync
-databases. Package names are prefixed by the repository name they were found in
-when they're not from the local database.
+Unless B<--from-sync> was used, B<pacdep> searches the local database first,
+and if not found searches all sync databases. Package names are prefixed by the
+repository name they were found in when they're not from the local database.
 
 You can have dependencies of a group listed, in which case the packages name
 and installed size will be shown.
@@ -157,6 +192,32 @@ B<--show-optional> is used :
 
 Dependencies are considered shared when they are required by at least one other
 package installed on the system that isn't an optional or exclusive dependency.
+
+=head1 REVERSE MODE
+
+When option B<--reverse> is used, instead of listing the dependencies of the
+specified packages, B<pacdep> will list packages that require them (i.e. the
+dependency tree is browsed in reverse).
+
+By default only immediate "requirers" are listed, i.e. packages that have one of
+the specified packages as dependency.
+
+Specifying the option a second time will go through the entire dependency tree,
+until a package that isn't required is found. All packages met will be listed.
+
+Specifying the option a third time will go through the dependency tree all the
+same, but only the end packages (that aren't required) will be listed.
+
+=head2 Optional Requirements
+
+You can use option B<--show-optional> and B<--list-optional> in reverse mode as
+well. Note that in this case, specifying option B<--show-optional> more than onc
+will not have any effect.
+
+Instead of listing optional dependencies, packages that have one of the
+specified packages as optional dependency will be listed. Obviously, there's no
+difference whether option B<--reverse> based on how many times B<--reverse> was
+used.
 
 =head1 NOTES
 

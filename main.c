@@ -114,6 +114,7 @@ typedef struct _config_t {
 
     bool             is_debug : 1;
     bool             from_sync : 1;
+    bool             sort_size : 1;
     bool             explicit : 1;
     unsigned int     reverse : 2;
     bool             list_requiredby : 1;
@@ -226,6 +227,7 @@ show_help (const char *prgname)
     puts (" -c, --config=FILE               pacman.conf file to use (else /etc/pacman.conf)");
     puts (" -d, --dbpath=PATH               Specify an alternate database location");
     puts ("     --from-sync                 Only look for specified package(s) in sync dbs");
+    puts (" -z, --sort-size                 Sort packages by size (else by name)");
     puts (" -x, --explicit                  Don't ignore explicitly installed dependencies");
     putchar ('\n');
     puts (" -r, --reverse                   Enable reverse mode (see man page)");
@@ -838,6 +840,36 @@ get_pkg_dep_state (data_t *data, alpm_list_t *refs, pkg_t *pkg)
     return d;
 }
 
+static int
+pkg_origin_size_cmp (pkg_t *pkg1, pkg_t *pkg2)
+{
+    off_t size1, size2;
+
+    if (pkg1->repo && !pkg2->repo)
+    {
+        return 1;
+    }
+    else if (!pkg1->repo && pkg2->repo)
+    {
+        return 0;
+    }
+
+    size1 = alpm_pkg_get_isize (pkg1->pkg);
+    size2 = alpm_pkg_get_isize (pkg2->pkg);
+
+    if (size1 > size2)
+    {
+        return -1;
+    }
+    else if (size1 == size2)
+    {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
 
 static int
 pkg_origin_name_cmp (pkg_t *pkg1, pkg_t *pkg2)
@@ -898,7 +930,9 @@ set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep)
 
             data->group[dep].pkgs = alpm_list_add_sorted (data->group[dep].pkgs,
                     pkg,
-                    (alpm_list_fn_cmp) pkg_origin_name_cmp);
+                    (alpm_list_fn_cmp) ((config.sort_size)
+                        ? pkg_origin_size_cmp
+                        : pkg_origin_name_cmp));
             if (len > data->group[dep].len_max)
             {
                 data->group[dep].len_max = len;
@@ -1353,6 +1387,7 @@ main (int argc, char *argv[])
         { "config",                     required_argument,  0,  'c' },
         { "dbpath",                     required_argument,  0,  'b' },
         { "from-sync",                  no_argument,        0,  'Y' },
+        { "sort-size",                  no_argument,        0,  'z' },
         { "explicit",                   no_argument,        0,  'x' },
         { "reverse",                    no_argument,        0,  'r' },
         { "list-requiredby",            no_argument,        0,  'R' },
@@ -1367,7 +1402,7 @@ main (int argc, char *argv[])
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:b:xrReEsSpoO", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:zxrReEsSpoO", options, &index);
         if (o == -1)
         {
             break;
@@ -1394,6 +1429,9 @@ main (int argc, char *argv[])
                 break;
             case 'Y':
                 config.from_sync = true;
+                break;
+            case 'z':
+                config.sort_size = true;
                 break;
             case 'x':
                 config.explicit = true;

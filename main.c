@@ -114,8 +114,9 @@ typedef struct _config_t {
 
     bool             is_debug : 1;
     bool             from_sync : 1;
-    bool             sort_size : 1;
+    bool             quiet : 1;
     bool             raw_sizes : 1;
+    bool             sort_size : 1;
     bool             explicit : 1;
     unsigned int     reverse : 2;
     bool             list_requiredby : 1;
@@ -239,8 +240,9 @@ show_help (const char *prgname)
     puts (" -c, --config=FILE               pacman.conf file to use (else /etc/pacman.conf)");
     puts (" -d, --dbpath=PATH               Specify an alternate database location");
     puts ("     --from-sync                 Only look for specified package(s) in sync dbs");
-    puts (" -z, --sort-size                 Sort packages by size (else by name)");
+    puts (" -q, --quiet                     Only output packages name & size");
     puts (" -w, --raw-sizes                 Show sizes in bytes (no formatting)");
+    puts (" -z, --sort-size                 Sort packages by size (else by name)");
     puts (" -x, --explicit                  Don't ignore explicitly installed dependencies");
     putchar ('\n');
     puts (" -r, --reverse                   Enable reverse mode (see man page)");
@@ -625,11 +627,11 @@ _print_size (off_t size)
     }
     if (unit == 1)
     {
-        fmt ="%6.0f %s";
+        fmt = (config.quiet) ? "%.0f %s" : "%6.0f %s";
     }
     else
     {
-        fmt = "%6.2f %s";
+        fmt = (config.quiet) ? "%.2f %s" : "%6.2f %s";
     }
     fprintf (stdout, fmt, hsize, units[unit - 1]);
 }
@@ -1108,7 +1110,7 @@ list_dependencies (data_t *data, dep_t dep)
     int flag = 0;
 
     /* is this group mixed (pkgs from local & sync) ? */
-    if (data->group[dep].size_local > 0
+    if (!config.quiet && data->group[dep].size_local > 0
             && data->group[dep].size > data->group[dep].size_local)
     {
         flag = 1;
@@ -1135,17 +1137,31 @@ list_dependencies (data_t *data, dep_t dep)
                 fputc ('\n', stdout);
                 flag = 3;
             }
-            fprintf (stdout, (flag) ? "  %s/%*s" : " %s/%*s",
-                    p->repo,
-                    /* +1 for the slash */
-                    -data->group[dep].len_max + (int) strlen (p->repo) + 1,
-                    p->name);
+            if (config.quiet)
+            {
+                fprintf (stdout, "%s/%s ", p->repo, p->name);
+            }
+            else
+            {
+                fprintf (stdout, (flag) ? "  %s/%*s" : " %s/%*s",
+                        p->repo,
+                        /* +1 for the slash */
+                        -data->group[dep].len_max + (int) strlen (p->repo) + 1,
+                        p->name);
+            }
         }
         else
         {
-            fprintf (stdout, (flag) ? "  %*s" : " %*s",
-                    -data->group[dep].len_max,
-                    p->name);
+            if (config.quiet)
+            {
+                fprintf (stdout, "%s ", p->name);
+            }
+            else
+            {
+                fprintf (stdout, (flag) ? "  %*s" : " %*s",
+                        -data->group[dep].len_max,
+                        p->name);
+            }
         }
         print_size (alpm_pkg_get_isize (p->pkg));
         fputc ('\n', stdout);
@@ -1160,15 +1176,18 @@ print_group (data_t *data,
         int          list_deps,
         int          list_deps_explicit)
 {
-    fprintf (stdout, "%*s", -len_max, data->group[dep].title);
-    print_size (data->group[dep].size);
-    fputc ('\n', stdout);
+    if (!config.quiet)
+    {
+        fprintf (stdout, "%*s", -len_max, data->group[dep].title);
+        print_size (data->group[dep].size);
+        fputc ('\n', stdout);
+    }
     if (list_deps)
     {
         list_dependencies (data, dep);
     }
     /* is this group mixed (pkgs from local & sync) ? */
-    else if (data->group[dep].size_local > 0
+    else if (!config.quiet && data->group[dep].size_local > 0
             && data->group[dep].size > data->group[dep].size_local)
     {
         fprintf (stdout, " %*s", -8, "local:");
@@ -1181,24 +1200,27 @@ print_group (data_t *data,
 
     if (config.explicit)
     {
-        fprintf (stdout, "%*s", -len_max, data->group[dep + 1].title);
-        print_size (data->group[dep + 1].size);
-        if (data->group[dep].size > 0 && data->group[dep + 1].size > 0)
+        if (!config.quiet)
         {
-            fputs (" (", stdout);
-            print_size (size);
-            fputs (")\n", stdout);
-        }
-        else
-        {
-            fputc ('\n', stdout);
+            fprintf (stdout, "%*s", -len_max, data->group[dep + 1].title);
+            print_size (data->group[dep + 1].size);
+            if (data->group[dep].size > 0 && data->group[dep + 1].size > 0)
+            {
+                fputs (" (", stdout);
+                print_size (size);
+                fputs (")\n", stdout);
+            }
+            else
+            {
+                fputc ('\n', stdout);
+            }
         }
         if (list_deps_explicit)
         {
             list_dependencies (data, dep + 1);
         }
         /* is this group mixed (pkgs from local & sync) ? */
-        else if (data->group[dep].size_local > 0
+        else if (!config.quiet && data->group[dep].size_local > 0
                 && data->group[dep].size > data->group[dep].size_local)
         {
             fprintf (stdout, " %*s", -8, "local:");
@@ -1400,8 +1422,9 @@ main (int argc, char *argv[])
         { "config",                     required_argument,  0,  'c' },
         { "dbpath",                     required_argument,  0,  'b' },
         { "from-sync",                  no_argument,        0,  'Y' },
-        { "sort-size",                  no_argument,        0,  'z' },
+        { "quiet",                      no_argument,        0,  'q' },
         { "raw-sizes",                  no_argument,        0,  'w' },
+        { "sort-size",                  no_argument,        0,  'z' },
         { "explicit",                   no_argument,        0,  'x' },
         { "reverse",                    no_argument,        0,  'r' },
         { "list-requiredby",            no_argument,        0,  'R' },
@@ -1416,7 +1439,7 @@ main (int argc, char *argv[])
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:b:zwxrReEsSpoO", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:qwzxrReEsSpoO", options, &index);
         if (o == -1)
         {
             break;
@@ -1444,11 +1467,14 @@ main (int argc, char *argv[])
             case 'Y':
                 config.from_sync = true;
                 break;
-            case 'z':
-                config.sort_size = true;
+            case 'q':
+                config.quiet = true;
                 break;
             case 'w':
                 config.raw_sizes = true;
+                break;
+            case 'z':
+                config.sort_size = true;
                 break;
             case 'x':
                 config.explicit = true;
@@ -1610,48 +1636,50 @@ main (int argc, char *argv[])
         goto release;
     }
 
-    data.group[DEP_UNKNOWN].title            = "Total dependencies:";
-    data.group[DEP_EXCLUSIVE].title          = "Exclusive dependencies:";
-    data.group[DEP_EXCLUSIVE_EXPLICIT].title = "Exclusive explicit dependencies:";
-    data.group[DEP_OPTIONAL].title           = "Optional dependencies:";
-    data.group[DEP_OPTIONAL_EXPLICIT].title  = "Optional explicit dependencies:";
-    data.group[DEP_SHARED].title             = "Shared dependencies:";
-    data.group[DEP_SHARED_EXPLICIT].title    = "Shared explicit dependencies:";
-    if (config.reverse)
-    {
-        data.group[DEP_EXCLUSIVE].title      = "Required by:";
-        data.group[DEP_OPTIONAL].title       = "Optionally required by:";
-    }
+    int len_max = 0;
+    int len;
 
-    int len_max     = 0;
-    int len         = (int) strlen (data.group[DEP_UNKNOWN].title) + 1;
-    if (len > len_max)
+    if (!config.quiet)
     {
+        data.group[DEP_UNKNOWN].title            = "Total dependencies:";
+        data.group[DEP_EXCLUSIVE].title          = "Exclusive dependencies:";
+        data.group[DEP_EXCLUSIVE_EXPLICIT].title = "Exclusive explicit dependencies:";
+        data.group[DEP_OPTIONAL].title           = "Optional dependencies:";
+        data.group[DEP_OPTIONAL_EXPLICIT].title  = "Optional explicit dependencies:";
+        data.group[DEP_SHARED].title             = "Shared dependencies:";
+        data.group[DEP_SHARED_EXPLICIT].title    = "Shared explicit dependencies:";
+        if (config.reverse)
+        {
+            data.group[DEP_EXCLUSIVE].title      = "Required by:";
+            data.group[DEP_OPTIONAL].title       = "Optionally required by:";
+        }
+
+        len = (int) strlen (data.group[DEP_UNKNOWN].title) + 1;
         len_max = len;
-    }
 
-    const char **t, *titles[] = { data.group[DEP_EXCLUSIVE].title,
-        data.group[DEP_EXCLUSIVE_EXPLICIT].title,
-        data.group[DEP_OPTIONAL].title,
-        data.group[DEP_OPTIONAL_EXPLICIT].title,
-        data.group[DEP_SHARED].title,
-        data.group[DEP_SHARED_EXPLICIT].title,
-        NULL
-    };
-    for (t = titles; *t; ++t)
-    {
-        if (config.reverse && t == titles + 3)
+        const char **t, *titles[] = { data.group[DEP_EXCLUSIVE].title,
+            data.group[DEP_EXCLUSIVE_EXPLICIT].title,
+            data.group[DEP_OPTIONAL].title,
+            data.group[DEP_OPTIONAL_EXPLICIT].title,
+            data.group[DEP_SHARED].title,
+            data.group[DEP_SHARED_EXPLICIT].title,
+            NULL
+        };
+        for (t = titles; *t; ++t)
         {
-            break;
-        }
-        if ((t - titles) % 2 && !config.explicit)
-        {
-            continue;
-        }
-        len = (int) strlen (*t) + 1;
-        if (len > len_max)
-        {
-            len_max = len;
+            if (config.reverse && t == titles + 3)
+            {
+                break;
+            }
+            if ((t - titles) % 2 && !config.explicit)
+            {
+                continue;
+            }
+            len = (int) strlen (*t) + 1;
+            if (len > len_max)
+            {
+                len_max = len;
+            }
         }
     }
 
@@ -1661,27 +1689,29 @@ main (int argc, char *argv[])
     {
         pkg_t *pkg = i->data;
 
-        /* calculate len_max to show package name (/w repo/provided if apply) */
-        if (strcmp (pkg->name_asked, pkg->name) == 0)
+        pkg->is_provided = strcmp (pkg->name_asked, pkg->name);
+        if (!config.quiet)
         {
-            pkg->is_provided = 0;
-            len = (int) strlen (pkg->name_asked) + 1;
-        }
-        else
-        {
-            pkg->is_provided = 1;
-            len = (int) strlen (pkg->name) + 1;
-            /* 16 == strlen (" is provided by ") */
-            len += (int) strlen (pkg->name_asked) + 16;
-        }
-        if (pkg->repo)
-        {
-            /* +1 for the / */
-            len += 1 + (int) strlen (pkg->repo);
-        }
-        if (len > len_max)
-        {
-            len_max = len;
+            /* calculate len_max to show package name (/w repo/provided if apply) */
+            if (!pkg->is_provided)
+            {
+                len = (int) strlen (pkg->name_asked) + 1;
+            }
+            else
+            {
+                len = (int) strlen (pkg->name) + 1;
+                /* 16 == strlen (" is provided by ") */
+                len += (int) strlen (pkg->name_asked) + 16;
+            }
+            if (pkg->repo)
+            {
+                /* +1 for the / */
+                len += 1 + (int) strlen (pkg->repo);
+            }
+            if (len > len_max)
+            {
+                len_max = len;
+            }
         }
 
         if (!config.reverse)
@@ -1779,12 +1809,22 @@ main (int argc, char *argv[])
             }
             else
             {
-                fprintf (stdout, "%s is provided by %s/%*s",
-                        pkg->name_asked,
-                        pkg->repo,
-                        -len_max + (int) strlen (pkg->name_asked) + 16
-                            + (int) strlen (pkg->repo) + 1,
-                        pkg->name);
+                if (config.quiet)
+                {
+                    fprintf (stdout, "%s %s/%s",
+                            pkg->name_asked,
+                            pkg->repo,
+                            pkg->name);
+                }
+                else
+                {
+                    fprintf (stdout, "%s is provided by %s/%*s",
+                            pkg->name_asked,
+                            pkg->repo,
+                            -len_max + (int) strlen (pkg->name_asked) + 16
+                                + (int) strlen (pkg->repo) + 1,
+                            pkg->name);
+                }
             }
         }
         else if (!pkg->is_provided)
@@ -1793,24 +1833,37 @@ main (int argc, char *argv[])
         }
         else
         {
-            fprintf (stdout, "%s is provided by %*s",
-                    pkg->name_asked,
-                    -len_max + (int) strlen (pkg->name_asked) + 16,
-                    pkg->name);
+            if (config.quiet)
+            {
+                fprintf (stdout, "%s %s",
+                        pkg->name_asked,
+                        pkg->name);
+            }
+            else
+            {
+                fprintf (stdout, "%s is provided by %*s",
+                        pkg->name_asked,
+                        -len_max + (int) strlen (pkg->name_asked) + 16,
+                        pkg->name);
+            }
+        }
+        if (config.quiet)
+        {
+            fputc (' ', stdout);
         }
         print_size (alpm_pkg_get_isize (pkg->pkg));
 
         /* more than one pkg, no package size -- it'll be on a new line, since
          * it's a combined size for all packages.
-         * In reverse mode, no package size either. */
-        if (nb_pkg > 1 || config.reverse)
+         * In quiet or reverse mode, no package size either. */
+        if (nb_pkg > 1 || config.quiet || config.reverse)
         {
             fputc ('\n', stdout);
         }
     }
 
-    /* package size doesn't apply in reverse, or with SCE_MIXED */
-    if (!config.reverse && data.source != SCE_MIXED)
+    /* package size doesn't apply in quiet, reverse, or with SCE_MIXED */
+    if (!config.quiet && !config.reverse && data.source != SCE_MIXED)
     {
         if (nb_pkg > 1)
         {
@@ -1874,15 +1927,18 @@ main (int argc, char *argv[])
                 config.list_shared_explicit);
     }
 
-    /* total deps */
-    fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
-    print_size (size_exclusive + size_shared + size_optional);
-    fputs (" (", stdout);
-    print_size (data.group[DEP_UNKNOWN].size_local
-            + size_exclusive
-            + size_shared
-            + size_optional);
-    fputs (")\n", stdout);
+    if (!config.quiet)
+    {
+        /* total deps */
+        fprintf (stdout, "%*s", -len_max, data.group[DEP_UNKNOWN].title);
+        print_size (size_exclusive + size_shared + size_optional);
+        fputs (" (", stdout);
+        print_size (data.group[DEP_UNKNOWN].size_local
+                + size_exclusive
+                + size_shared
+                + size_optional);
+        fputs (")\n", stdout);
+    }
 
     /* free list of deps */
     alpm_list_free_inner (data.deps, (alpm_list_fn_free) free_pkg);

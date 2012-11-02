@@ -1582,7 +1582,6 @@ main (int argc, char *argv[])
             char     c;
             size_t   alloc  = BUF_LEN;
             size_t   len    = 0;
-            int      n      = 0;
 
             name = malloc (sizeof (*name) * alloc);
             if (!name)
@@ -1599,10 +1598,6 @@ main (int argc, char *argv[])
                     if (s > name)
                     {
                         *s = '\0';
-                        if (n++ > 0)
-                        {
-                            fputc ('\n', stdout);
-                        }
                         preprocess_package (&data, name);
                         s = name;
                         len = 0;

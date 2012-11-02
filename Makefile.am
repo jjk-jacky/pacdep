@@ -5,8 +5,15 @@ bin_PROGRAMS = pacdep
 nodist_man_MANS = pacdep.1
 dist_doc_DATA = AUTHORS COPYING HISTORY README.md
 
+if USE_GIT_VERSION
+_VERSION = `git describe --abbrev=4 --dirty --always`
+DEFS += -DGIT_VERSION=\"$(_VERSION)\"
+else
+_VERSION = $(PACKAGE_VERSION)
+endif
+
 dist-hook:
-	cp $(srcdir)/pacdep.pod $(distdir)/
+	cp "$(srcdir)/pacdep.pod" "$(distdir)/"
 
 AM_CFLAGS = -g -std=c99 \
 		-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
@@ -17,5 +24,5 @@ AM_CFLAGS = -g -std=c99 \
 pacdep_SOURCES = main.c
 
 pacdep.1: pacdep.pod
-	pod2man --center="Package Dependencies listing" --section=1 --release=$(PACKAGE_VERSION) pacdep.pod pacdep.1
+	pod2man --center="Package Dependencies listing" --section=1 --release=$(_VERSION) pacdep.pod pacdep.1
 

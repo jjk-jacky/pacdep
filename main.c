@@ -662,18 +662,13 @@ new_package (data_t *data, alpm_pkg_t *pkg)
 {
     pkg_t *p;
 
-    p = malloc (sizeof (*p));
+    p = calloc (1, sizeof (*p));
     p->name = alpm_pkg_get_name (pkg);
     p->pkg  = pkg;
-    p->deps = NULL;
     p->dep  = DEP_UNKNOWN;
     if (alpm_pkg_get_origin (pkg) == PKG_FROM_SYNCDB)
     {
         p->repo = alpm_db_get_name (alpm_pkg_get_db (pkg));
-    }
-    else
-    {
-        p->repo = NULL;
     }
 
     /* add it right now, so it's found when adding its own dep */

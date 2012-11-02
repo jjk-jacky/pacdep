@@ -115,6 +115,7 @@ typedef struct _config_t {
     bool             is_debug : 1;
     bool             from_sync : 1;
     bool             sort_size : 1;
+    bool             raw_sizes : 1;
     bool             explicit : 1;
     unsigned int     reverse : 2;
     bool             list_requiredby : 1;
@@ -131,6 +132,17 @@ static config_t config;
 
 static void
 set_pkg_dep (data_t *data, alpm_list_t *refs, pkg_t *pkg, dep_t dep);
+
+#define print_size(size)    do {         \
+    if (config.raw_sizes)                \
+    {                                    \
+        fprintf (stdout, "%ld", size);   \
+    }                                    \
+    else                                 \
+    {                                    \
+        _print_size (size);              \
+    }                                    \
+} while (0)
 
 
 static void
@@ -228,6 +240,7 @@ show_help (const char *prgname)
     puts (" -d, --dbpath=PATH               Specify an alternate database location");
     puts ("     --from-sync                 Only look for specified package(s) in sync dbs");
     puts (" -z, --sort-size                 Sort packages by size (else by name)");
+    puts (" -w, --raw-sizes                 Show sizes in bytes (no formatting)");
     puts (" -x, --explicit                  Don't ignore explicitly installed dependencies");
     putchar ('\n');
     puts (" -r, --reverse                   Enable reverse mode (see man page)");
@@ -594,7 +607,7 @@ alpm_load (alpm_handle_t **handle,
 }
 
 static void
-print_size (off_t size)
+_print_size (off_t size)
 {
     const char *units[]  = { "B", "KiB", "MiB", "GiB" };
     int         nb_units = sizeof (units) / sizeof (units[0]);
@@ -1388,6 +1401,7 @@ main (int argc, char *argv[])
         { "dbpath",                     required_argument,  0,  'b' },
         { "from-sync",                  no_argument,        0,  'Y' },
         { "sort-size",                  no_argument,        0,  'z' },
+        { "raw-sizes",                  no_argument,        0,  'w' },
         { "explicit",                   no_argument,        0,  'x' },
         { "reverse",                    no_argument,        0,  'r' },
         { "list-requiredby",            no_argument,        0,  'R' },
@@ -1402,7 +1416,7 @@ main (int argc, char *argv[])
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:b:zxrReEsSpoO", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:zwxrReEsSpoO", options, &index);
         if (o == -1)
         {
             break;
@@ -1432,6 +1446,9 @@ main (int argc, char *argv[])
                 break;
             case 'z':
                 config.sort_size = true;
+                break;
+            case 'w':
+                config.raw_sizes = true;
                 break;
             case 'x':
                 config.explicit = true;

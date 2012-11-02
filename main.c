@@ -78,8 +78,9 @@ typedef enum {
 typedef struct _pkg_t {
     const char  *name_asked;    /* from cmdline */
     const char  *name;          /* can be a provider */
-    bool         is_provided;
     const char  *repo;
+    bool         is_provided : 1;
+    bool         need_free : 1;
     alpm_pkg_t  *pkg;
     alpm_list_t *deps;
     dep_t        dep;
@@ -1101,6 +1102,10 @@ get_pkg_requiredby (data_t *data, pkg_t *pkg)
 static void
 free_pkg (pkg_t *pkg)
 {
+    if (pkg->need_free)
+    {
+        free ((char *) pkg->name_asked);
+    }
     alpm_list_free (pkg->deps);
     free (pkg);
 }
@@ -1237,7 +1242,7 @@ print_group (data_t *data,
 }
 
 static void
-preprocess_package (data_t *data, const char *pkgname)
+preprocess_package (data_t *data, const char *pkgname, bool dup_name)
 {
     alpm_pkg_t  *pkg = NULL;
     pkg_t       *p;
@@ -1269,7 +1274,8 @@ preprocess_package (data_t *data, const char *pkgname)
          * will also add it to data->deps */
         p = new_package (data, pkg);
     }
-    p->name_asked = pkgname;
+    p->need_free = dup_name;
+    p->name_asked = (dup_name) ? strdup (pkgname) : pkgname;
     /* mark exclusive right now, so when dependencies are sorted out all
      * "main" packages are seen as exclusive */
     p->dep = DEP_EXCLUSIVE;
@@ -1598,7 +1604,7 @@ main (int argc, char *argv[])
                     if (s > name)
                     {
                         *s = '\0';
-                        preprocess_package (&data, name);
+                        preprocess_package (&data, name, true);
                         s = name;
                         len = 0;
                     }
@@ -1622,7 +1628,7 @@ main (int argc, char *argv[])
         }
         else
         {
-            preprocess_package (&data, argv[optind]);
+            preprocess_package (&data, argv[optind], false);
         }
     }
 

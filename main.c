@@ -332,7 +332,7 @@ strtrim (char *str)
 static int
 parse_pacman_conf (const char        *file,
                    char              *name,
-                   int                is_options,
+                   bool               is_options,
                    int                depth,
                    pacman_config_t  **pacconf,
                    char             **error)
@@ -554,6 +554,7 @@ alpm_load (alpm_handle_t **handle,
     int                  rc = E_OK;
     enum _alpm_errno_t   err;
     pacman_config_t     *pac_conf = NULL;
+    alpm_list_t         *i;
 
     /* parse pacman.conf */
     debug ("parsing pacman.conf (%s) for options\n", conffile);
@@ -585,7 +586,6 @@ alpm_load (alpm_handle_t **handle,
     }
 
     /* now we need to add dbs */
-    alpm_list_t *i;
     FOR_LIST (i, pac_conf->databases)
     {
         char *db_name = i->data;
@@ -615,7 +615,7 @@ static void
 _print_size (off_t size)
 {
     const char *units[]  = { "B", "KiB", "MiB", "GiB" };
-    int         nb_units = sizeof (units) / sizeof (units[0]);
+    int         nb_units = (int) (sizeof (units) / sizeof (units[0]));
 
     double hsize;
     int    unit;
@@ -1050,9 +1050,10 @@ get_pkg_requiredby (data_t *data, pkg_t *pkg)
                 (alpm_list_fn_cmp) pkg_find_name_fn);
         if (!r)
         {
-            debug ("[%s] found req: %s\n", pkg->name, name);
             /* not in our tree, is it installed? */
             alpm_pkg_t *p = NULL;
+
+            debug ("[%s] found req: %s\n", pkg->name, name);
 
             if (data->source == SCE_LOCAL || data->source == SCE_MIXED)
             {
@@ -1175,8 +1176,8 @@ print_group (data_t *data,
         dep_t        dep,
         int          len_max,
         off_t        size,
-        int          list_deps,
-        int          list_deps_explicit)
+        bool         list_deps,
+        bool         list_deps_explicit)
 {
     if (!config.quiet)
     {
@@ -1310,11 +1311,11 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
         debug ("add %s's optional dependencies\n", pkgname);
         FOR_LIST (i, alpm_pkg_get_optdepends (pkg))
         {
-            char *name = i->data;
+            char *optdep = i->data;
             char *s;
 
             /* optdepends are info strings: "package: some desc" */
-            s = strchr (name, ':');
+            s = strchr (optdep, ':');
             if (s)
             {
                 *s = '\0';
@@ -1323,13 +1324,13 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
             /* is this dependency installed ? */
             pkg = alpm_find_dbs_satisfier (config.alpm,
                     config.localdb,
-                    name);
+                    optdep);
             if (!pkg)
             {
                 /* should we list non-installed deps ? */
                 if (config.show_optional < 3)
                 {
-                    debug ("ignoring non-installed %s\n", name);
+                    debug ("ignoring non-installed %s\n", optdep);
                     if (s)
                     {
                         *s = ':';
@@ -1338,11 +1339,11 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
                 }
                 pkg = alpm_find_dbs_satisfier (config.alpm,
                         config.syncdbs,
-                        name);
+                        optdep);
             }
             if (!pkg)
             {
-                debug ("ignoring non-found %s\n", name);
+                debug ("ignoring non-found %s\n", optdep);
                 if (s)
                 {
                     *s = ':';
@@ -1371,7 +1372,7 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
                  * but outside of our deptree */
                 alpm_list_t *reqs;
                 alpm_list_t *j;
-                int ignore = 0;
+                bool         ignore = false;
 
                 reqs = alpm_pkg_compute_requiredby (pkg);
                 FOR_LIST (j, reqs)
@@ -1388,7 +1389,7 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
                                     config.localdb,
                                     name))
                         {
-                            ignore = 1;
+                            ignore = true;
                             debug ("ignoring %s required by %s\n",
                                     alpm_pkg_get_name (pkg),
                                     name);

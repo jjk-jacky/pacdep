@@ -62,6 +62,20 @@ Show full sizes in bytes, without any formatting/thousand separator.
 When listing dependencies, by default packages are sorted (within their groups)
 by names. With this option they'll be sorted by size (descendingly).
 
+=item B<-p, --show-optional>
+
+Take optional dependencies into consideration. This will include optional
+dependencies if they're not explicitly installed (unless B<--explicit> was used),
+and aren't required/dependency of an installed package.
+
+Specify this option twice to also include packages that are dependencies of
+installed package.
+
+Specify it a third time to include all optional dependencies. This will include
+both explicitly installed packages, as well as non-installed packages.
+
+See L<B<NOTES>|/NOTES> below.
+
 =item B<-x, --explicit>
 
 Don't ignore explicitly installed dependencies
@@ -96,20 +110,6 @@ List shared dependencies
 =item B<-S, --list-shared-explicit>
 
 List shared explicit dependencies. Implies B<--explicit>
-
-=item B<-p, --show-optional>
-
-Take optional dependencies into consideration. This will include optional
-dependencies if they're not explicitly installed (unless B<--explicit> was used),
-and aren't required/dependency of an installed package.
-
-Specify this option twice to also include packages that are dependencies of
-installed package.
-
-Specify it a third time to include all optional dependencies. This will include
-both explicitly installed packages, as well as non-installed packages.
-
-See L<B<NOTES>|/NOTES> below.
 
 =item B<-o, --list-optional>
 

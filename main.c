@@ -118,6 +118,7 @@ typedef struct _config_t {
     bool             quiet : 1;
     bool             raw_sizes : 1;
     bool             sort_size : 1;
+    unsigned int     show_optional : 2;
     bool             explicit : 1;
     unsigned int     reverse : 2;
     bool             list_requiredby : 1;
@@ -125,7 +126,6 @@ typedef struct _config_t {
     bool             list_exclusive_explicit : 1;
     bool             list_shared : 1;
     bool             list_shared_explicit : 1;
-    unsigned int     show_optional : 2;
     bool             list_optional : 1;
     bool             list_optional_explicit : 1;
 } config_t;
@@ -246,6 +246,7 @@ show_help (const char *prgname)
     puts (" -q, --quiet                     Only output packages name & size");
     puts (" -w, --raw-sizes                 Show sizes in bytes (no formatting)");
     puts (" -z, --sort-size                 Sort packages by size (else by name)");
+    puts (" -p, --show-optional             Show optional dependencies (see man page)");
     puts (" -x, --explicit                  Don't ignore explicitly installed dependencies");
     putchar ('\n');
     puts (" -r, --reverse                   Enable reverse mode (see man page)");
@@ -255,7 +256,6 @@ show_help (const char *prgname)
     puts (" -E, --list-exclusive-explicit   List exclusive explicit dependencies");
     puts (" -s, --list-shared               List shared dependencies");
     puts (" -S, --list-shared-explicit      List shared explicit dependencies");
-    puts (" -p, --show-optional             Show optional dependencies (see man page)");
     puts (" -o, --list-optional             List optional dependencies");
     puts (" -O, --list-optional-explicit    List optional explicit dependencies");
     exit (0);
@@ -1428,6 +1428,7 @@ main (int argc, char *argv[])
         { "quiet",                      no_argument,        0,  'q' },
         { "raw-sizes",                  no_argument,        0,  'w' },
         { "sort-size",                  no_argument,        0,  'z' },
+        { "show-optional",              no_argument,        0,  'p' },
         { "explicit",                   no_argument,        0,  'x' },
         { "reverse",                    no_argument,        0,  'r' },
         { "list-requiredby",            no_argument,        0,  'R' },
@@ -1435,14 +1436,13 @@ main (int argc, char *argv[])
         { "list-exclusive-explicit",    no_argument,        0,  'E' },
         { "list-shared",                no_argument,        0,  's' },
         { "list-shared-explicit",       no_argument,        0,  'S' },
-        { "show-optional",              no_argument,        0,  'p' },
         { "list-optional",              no_argument,        0,  'o' },
         { "list-optional-explicit",     no_argument,        0,  'O' },
         { 0,                            0,                  0,    0 },
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:b:qwzxrReEsSpoO", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:qwzpxrReEsSoO", options, &index);
         if (o == -1)
         {
             break;
@@ -1479,6 +1479,15 @@ main (int argc, char *argv[])
             case 'z':
                 config.sort_size = true;
                 break;
+            case 'p':
+                if (config.show_optional >= 3)
+                {
+                    fprintf (stderr,
+                            "Option --show-optional can only be used up to three times\n");
+                    return 1;
+                }
+                config.show_optional++;
+                break;
             case 'x':
                 config.explicit = true;
                 break;
@@ -1507,15 +1516,6 @@ main (int argc, char *argv[])
             case 'S':
                 config.list_shared_explicit = true;
                 config.explicit = true;
-                break;
-            case 'p':
-                if (config.show_optional >= 3)
-                {
-                    fprintf (stderr,
-                            "Option --show-optional can only be used up to three times\n");
-                    return 1;
-                }
-                config.show_optional++;
                 break;
             case 'o':
                 config.list_optional = true;

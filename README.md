@@ -33,12 +33,11 @@ removing the package and its dependencies), or the size needed to install them.
 
 Some useful links if you're looking for more info :
 
-- [blog post about pacdep](http://mywaytoarch.tumblr.com "Easily list packages
-dependencies")
+- [blog post about pacdep](http://mywaytoarch.tumblr.com/post/34979742718/easily-list-package-dependencies "Easily list packages dependencies")
 
 - [source code & issue tracker](https://github.com/jjk-jacky/pacdep "pacdep @
  GitHub.com")
 
-- [PKGBUILD in AUR](https://aur.archlinux.org/packages.php?ID= "AUR: pacdep")
+- [PKGBUILD in AUR](https://aur.archlinux.org/packages/pacdep/ "AUR: pacdep")
 
 Plus, pacdep comes with a man page.

@@ -593,7 +593,7 @@ alpm_load (alpm_handle_t **handle,
 
         /* register db */
         debug ("register %s\n", db_name);
-        db = alpm_db_register_sync (*handle, db_name, ALPM_SIG_USE_DEFAULT);
+        db = alpm_register_syncdb (*handle, db_name, ALPM_SIG_USE_DEFAULT);
         if (db == NULL)
         {
             set_error (error,
@@ -666,7 +666,7 @@ new_package (data_t *data, alpm_pkg_t *pkg)
     p->name = alpm_pkg_get_name (pkg);
     p->pkg  = pkg;
     p->dep  = DEP_UNKNOWN;
-    if (alpm_pkg_get_origin (pkg) == PKG_FROM_SYNCDB)
+    if (alpm_pkg_get_origin (pkg) == ALPM_PKG_FROM_SYNCDB)
     {
         p->repo = alpm_db_get_name (alpm_pkg_get_db (pkg));
     }
@@ -717,7 +717,7 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
         free (n);
 
         if (!config.explicit
-                && alpm_pkg_get_origin (dep) == PKG_FROM_LOCALDB
+                && alpm_pkg_get_origin (dep) == ALPM_PKG_FROM_LOCALDB
                 && alpm_pkg_get_reason (dep) == ALPM_PKG_REASON_EXPLICIT)
         {
             debug ("ignoring dependency %s, explicitly installed\n",
@@ -1358,7 +1358,7 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
             /* explicitly installed optdep are ignored by default */
             if (config.show_optional < 3
                     && !config.explicit
-                    && alpm_pkg_get_origin (pkg) == PKG_FROM_LOCALDB
+                    && alpm_pkg_get_origin (pkg) == ALPM_PKG_FROM_LOCALDB
                     && alpm_pkg_get_reason (pkg) == ALPM_PKG_REASON_EXPLICIT)
             {
                 debug ("ignoring explicitly installed %s\n",
@@ -1568,8 +1568,8 @@ main (int argc, char *argv[])
         return rc;
     }
 
-    config.localdb = alpm_list_add (NULL, alpm_option_get_localdb (config.alpm));
-    config.syncdbs = alpm_option_get_syncdbs (config.alpm);
+    config.localdb = alpm_list_add (NULL, alpm_get_localdb (config.alpm));
+    config.syncdbs = alpm_get_syncdbs (config.alpm);
 
     data_t data;
 

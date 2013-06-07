@@ -1006,7 +1006,7 @@ get_pkg_optrequiredby (data_t *data, pkg_t *pkg)
 
             FOR_LIST (k, alpm_pkg_get_optdepends (p))
             {
-                const char *name  = k->data;
+                const char *name  = ((alpm_depend_t *) k->data)->name;
 
                 if (strncmp (pkg->name, name, len) == 0 &&
                         (name[len] == ':' || name[len] == '\0'))
@@ -1311,48 +1311,28 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
         debug ("add %s's optional dependencies\n", pkgname);
         FOR_LIST (i, alpm_pkg_get_optdepends (pkg))
         {
-            char *optdep = i->data;
-            char *s;
-
-            /* optdepends are info strings: "package: some desc" */
-            s = strchr (optdep, ':');
-            if (s)
-            {
-                *s = '\0';
-            }
+            alpm_depend_t *optdep = i->data;
 
             /* is this dependency installed ? */
             pkg = alpm_find_dbs_satisfier (config.alpm,
                     config.localdb,
-                    optdep);
+                    optdep->name);
             if (!pkg)
             {
                 /* should we list non-installed deps ? */
                 if (config.show_optional < 3)
                 {
-                    debug ("ignoring non-installed %s\n", optdep);
-                    if (s)
-                    {
-                        *s = ':';
-                    }
+                    debug ("ignoring non-installed %s\n", optdep->name);
                     continue;
                 }
                 pkg = alpm_find_dbs_satisfier (config.alpm,
                         config.syncdbs,
-                        optdep);
+                        optdep->name);
             }
             if (!pkg)
             {
-                debug ("ignoring non-found %s\n", optdep);
-                if (s)
-                {
-                    *s = ':';
-                }
+                debug ("ignoring non-found %s\n", optdep->name);
                 continue;
-            }
-            if (s)
-            {
-                *s = ':';
             }
 
             /* explicitly installed optdep are ignored by default */
@@ -1725,7 +1705,7 @@ main (int argc, char *argv[])
 
                 FOR_LIST (j, alpm_pkg_get_optdepends (pkg->pkg))
                 {
-                    char *name = j->data;
+                    char *name = ((alpm_depend_t *) j->data)->name;
                     char *s;
                     pkg_t *p;
 
@@ -1956,4 +1936,3 @@ release:
     alpm_list_free (config.localdb);
     return rc;
 }
-

@@ -79,8 +79,8 @@ typedef struct _pkg_t {
     const char  *name_asked;    /* from cmdline */
     const char  *name;          /* can be a provider */
     const char  *repo;
-    bool         is_provided : 1;
-    bool         need_free : 1;
+    unsigned int is_provided : 1;
+    unsigned int need_free : 1;
     alpm_pkg_t  *pkg;
     alpm_list_t *deps;
     dep_t        dep;
@@ -113,21 +113,21 @@ typedef struct _config_t {
     alpm_list_t     *localdb;
     alpm_list_t     *syncdbs;
 
-    bool             is_debug : 1;
-    bool             from_sync : 1;
-    bool             quiet : 1;
-    bool             raw_sizes : 1;
-    bool             sort_size : 1;
+    unsigned int     is_debug : 1;
+    unsigned int     from_sync : 1;
+    unsigned int     quiet : 1;
+    unsigned int     raw_sizes : 1;
+    unsigned int     sort_size : 1;
     unsigned int     show_optional : 2;
-    bool             explicit : 1;
+    unsigned int     explicit : 1;
     unsigned int     reverse : 2;
-    bool             list_requiredby : 1;
-    bool             list_exclusive : 1;
-    bool             list_exclusive_explicit : 1;
-    bool             list_shared : 1;
-    bool             list_shared_explicit : 1;
-    bool             list_optional : 1;
-    bool             list_optional_explicit : 1;
+    unsigned int     list_requiredby : 1;
+    unsigned int     list_exclusive : 1;
+    unsigned int     list_exclusive_explicit : 1;
+    unsigned int     list_shared : 1;
+    unsigned int     list_shared_explicit : 1;
+    unsigned int     list_optional : 1;
+    unsigned int     list_optional_explicit : 1;
 } config_t;
 
 static config_t config;

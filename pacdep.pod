@@ -33,7 +33,7 @@ Specify an alternate database location
 =item B<--from-sync>
 
 Only look for specified package(s) in sync databases. By default pacdep looks in
-the locap database first, and if not found then looks in sync databases.
+the local database first, and if not found then looks in sync databases.
 
 While this should be good most of the times, it doesn't allow to get information
 about a package from sync databases, if said package is not installed but
@@ -52,6 +52,17 @@ to list dependencies was used, nothing else will be shown.
 
 In case of of the specified name is provided by another package, the line will
 contain the specified name, the package name (provider), and its size.
+
+=item B<-P, --show-path>
+
+Show the (shorter) "dependency path" for each of the listed dependency. By
+dependency path is intended the list of packages requiring the listed
+dependency, up to the main package.
+
+Can be useful to understand why a dependency is listed, if it appears as
+dependency of a dependency of yet another dependency of the main package.
+
+Obviously, this doesn't apply/do anything with B<--reverse>
 
 =item B<-w, --raw-sizes>
 
@@ -144,7 +155,8 @@ and if not found searches all sync databases. Package names are prefixed by the
 repository name they were found in when they're not from the local database.
 
 You can have dependencies of a group listed, in which case the packages name
-and installed size will be shown.
+and installed size will be shown. You can also show the "dependency path" for
+each package, using B<--show-path>.
 
 =head2 Package size
 

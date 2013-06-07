@@ -76,14 +76,15 @@ typedef enum {
 } dep_t;
 
 typedef struct _pkg_t {
-    const char  *name_asked;    /* from cmdline */
-    const char  *name;          /* can be a provider */
-    const char  *repo;
-    unsigned int is_provided : 1;
-    unsigned int need_free : 1;
-    alpm_pkg_t  *pkg;
-    alpm_list_t *deps;
-    dep_t        dep;
+    const char      *name_asked;    /* from cmdline */
+    const char      *name;          /* can be a provider */
+    const char      *repo;
+    unsigned int     is_provided : 1;
+    unsigned int     need_free : 1;
+    alpm_pkg_t      *pkg;
+    alpm_list_t     *deps;
+    dep_t            dep;
+    struct _pkg_t   *req_by;
 } pkg_t;
 
 typedef struct _group_t {
@@ -116,6 +117,7 @@ typedef struct _config_t {
     unsigned int     is_debug : 1;
     unsigned int     from_sync : 1;
     unsigned int     quiet : 1;
+    unsigned int     show_path : 1;
     unsigned int     raw_sizes : 1;
     unsigned int     sort_size : 1;
     unsigned int     show_optional : 2;
@@ -244,6 +246,7 @@ show_help (const char *prgname)
     puts (" -d, --dbpath=PATH               Specify an alternate database location");
     puts ("     --from-sync                 Only look for specified package(s) in sync dbs");
     puts (" -q, --quiet                     Only output packages name & size");
+    puts (" -P, --show-path                 Show dependency path");
     puts (" -w, --raw-sizes                 Show sizes in bytes (no formatting)");
     puts (" -z, --sort-size                 Sort packages by size (else by name)");
     puts (" -p, --show-optional             Show optional dependencies (see man page)");
@@ -678,8 +681,19 @@ new_package (data_t *data, alpm_pkg_t *pkg)
     return p;
 }
 
+static inline int
+get_req_depth (pkg_t *p)
+{
+    int depth = 0;
+    for ( ; p->req_by; p = p->req_by)
+    {
+        ++depth;
+    }
+    return depth;
+}
+
 static pkg_t *
-add_to_deps (data_t *data, alpm_pkg_t *pkg)
+add_to_deps (data_t *data, alpm_pkg_t *pkg, pkg_t *from_p)
 {
     pkg_t       *p;
     alpm_list_t *i;
@@ -689,10 +703,15 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
     if (p)
     {
         debug ("%s already in deps\n", alpm_pkg_get_name (pkg));
+        if (from_p && p->req_by && get_req_depth (p) > get_req_depth (from_p))
+        {
+            p->req_by = from_p;
+        }
         return p;
     }
 
     p = new_package (data, pkg);
+    p->req_by = from_p;
 
     /* go through dep tree to list all dependencies involved */
     FOR_LIST (i, alpm_pkg_get_depends (pkg))
@@ -726,7 +745,7 @@ add_to_deps (data_t *data, alpm_pkg_t *pkg)
         }
 
         debug ("add to deps: %s\n", alpm_pkg_get_name (dep));
-        d = add_to_deps (data, dep);
+        d = add_to_deps (data, dep, p);
         if (d)
         {
             debug ("%s new in deps, adding to %s's dependencies\n",
@@ -1167,6 +1186,22 @@ list_dependencies (data_t *data, dep_t dep)
             }
         }
         print_size (alpm_pkg_get_isize (p->pkg));
+        if (config.show_path && p->req_by)
+        {
+            pkg_t *d;
+
+            for (d = p->req_by; d; d = d->req_by)
+            {
+                if (d->repo)
+                {
+                    fprintf (stdout, " <- %s/%s", d->repo, d->name);
+                }
+                else
+                {
+                    fprintf (stdout, " <- %s", d->name);
+                }
+            }
+        }
         fputc ('\n', stdout);
     }
 }
@@ -1262,7 +1297,7 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
     if (!config.reverse)
     {
         debug ("create list of all dependencies for %s\n", pkgname);
-        p = add_to_deps (data, pkg);
+        p = add_to_deps (data, pkg, NULL);
     }
     else
     {
@@ -1358,11 +1393,12 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
                 FOR_LIST (j, reqs)
                 {
                     const char *name = j->data;
+                    pkg_t *_p;
 
-                    p = alpm_list_find (data->deps,
+                    _p = alpm_list_find (data->deps,
                             name,
                             (alpm_list_fn_cmp) pkg_find_name_fn);
-                    if (!p)
+                    if (!_p)
                     {
                         /* not in our tree, is it installed? */
                         if (alpm_find_dbs_satisfier (config.alpm,
@@ -1384,7 +1420,8 @@ preprocess_package (data_t *data, const char *pkgname, bool dup_name)
                 }
             }
 
-            add_to_deps (data, pkg);
+            debug ("add %s's optdep %s\n", p->name, alpm_pkg_get_name (pkg));
+            add_to_deps (data, pkg, p);
         }
     }
 }
@@ -1407,6 +1444,7 @@ main (int argc, char *argv[])
         { "dbpath",                     required_argument,  0,  'b' },
         { "from-sync",                  no_argument,        0,  'Y' },
         { "quiet",                      no_argument,        0,  'q' },
+        { "show-path",                  no_argument,        0,  'P' },
         { "raw-sizes",                  no_argument,        0,  'w' },
         { "sort-size",                  no_argument,        0,  'z' },
         { "show-optional",              no_argument,        0,  'p' },
@@ -1423,7 +1461,7 @@ main (int argc, char *argv[])
     };
     for (;;)
     {
-        o = getopt_long (argc, argv, "hVdc:b:qwzpxrReEsSoO", options, &index);
+        o = getopt_long (argc, argv, "hVdc:b:qPwzpxrReEsSoO", options, &index);
         if (o == -1)
         {
             break;
@@ -1453,6 +1491,9 @@ main (int argc, char *argv[])
                 break;
             case 'q':
                 config.quiet = true;
+                break;
+            case 'P':
+                config.show_path = true;
                 break;
             case 'w':
                 config.raw_sizes = true;

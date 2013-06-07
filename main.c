@@ -1,8 +1,8 @@
 /**
- * pacdep - Copyright (C) 2012 Olivier Brunel
+ * pacdep - Copyright (C) 2012-2013 Olivier Brunel
  *
  * main.c
- * Copyright (C) 2012 Olivier Brunel <i.am.jack.mail@gmail.com>
+ * Copyright (C) 2012-2013 Olivier Brunel <i.am.jack.mail@gmail.com>
  *
  * This file is part of pacdep.
  *
@@ -223,7 +223,7 @@ static void
 show_version (void)
 {
     puts (PACKAGE_NAME " - " PACKAGE_TAG " v" PACKAGE_VERSION);
-    puts ("Copyright (C) 2012 Olivier Brunel");
+    puts ("Copyright (C) 2012-2013 Olivier Brunel");
     puts ("License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>");
     puts ("This is free software: you are free to change and redistribute it.");
     puts ("There is NO WARRANTY, to the extent permitted by law.");

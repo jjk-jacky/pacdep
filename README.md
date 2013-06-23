@@ -12,7 +12,8 @@ databases. Package names are prefixed by the repository name they were found in
 when they're not from the local database.
 
 You can have dependencies of a group listed, in which case the packages name
-and installed size will be shown.
+and installed size will be shown. You can also show the "dependency path" for
+each pakcage, using **--show-path**
 
 ## Package size
 
@@ -33,10 +34,9 @@ removing the package and its dependencies), or the size needed to install them.
 
 Some useful links if you're looking for more info :
 
-- [blog post about pacdep](http://mywaytoarch.tumblr.com/post/34979742718/easily-list-package-dependencies "Easily list packages dependencies")
+- [blog post about pacdep](http://jjacky.com/pacdep "pacdep @ jjacky.com")
 
-- [source code & issue tracker](https://github.com/jjk-jacky/pacdep "pacdep @
- GitHub.com")
+- [source code & issue tracker](https://github.com/jjk-jacky/pacdep "pacdep @ GitHub.com")
 
 - [PKGBUILD in AUR](https://aur.archlinux.org/packages/pacdep/ "AUR: pacdep")
 

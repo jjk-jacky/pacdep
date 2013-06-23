@@ -1,4 +1,10 @@
 
+# 2013-06-23i; v1.1.0
+
+- Add option --show-path to show "dependency path"
+
+- Fix optdep not working since pacman 4.1.0
+
 # 2013-04-05; v1.0.0
 
 - Bumping to stable
